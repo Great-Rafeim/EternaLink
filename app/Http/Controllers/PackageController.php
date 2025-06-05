@@ -4,176 +4,195 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\ServicePackage;
-use App\Models\PackageCategory;
-use App\Models\CategoryItem;
-use Auth;
+use App\Models\InventoryCategory;
+use App\Models\InventoryItem;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB; 
+
 
 class PackageController extends Controller
 {
 
     public function index()
     {
-        $packages = \App\Models\ServicePackage::with('categories.items')
-            ->where('funeral_home_id', auth()->id())
-            ->get();
+        // Fetch packages for the logged-in funeral home
+        $packages = \App\Models\ServicePackage::where('funeral_home_id', auth()->id())->get();
 
         return view('funeral.packages.index', compact('packages'));
     }
 
+    public static function updatePackagesWithItem($itemId)
+{
+    // Find all service packages that use this item
+    $packageIds = DB::table('inventory_item_service_package')
+        ->where('inventory_item_id', $itemId)
+        ->pluck('service_package_id');
+
+    foreach ($packageIds as $packageId) {
+        $package = ServicePackage::with('items')->find($packageId);
+        if ($package) {
+            $newTotal = $package->items->sum(function ($item) {
+                return ($item->selling_price ?? 0) * ($item->pivot->quantity ?? 1);
+            });
+            $package->update(['total_price' => $newTotal]);
+        }
+    }
+}
 
 
     public function create()
     {
-        return view('funeral.packages.create');
-    }
+        // Fetch all categories
+        $categories = InventoryCategory::all();
 
-public function store(Request $request)
-{
-    $request->validate([
-        'name' => 'required|string|max:255',
-        'description' => 'nullable|string',
-        'categories' => 'required|array',
-        'categories.*.name' => 'required|string|max:255',
-        'categories.*.items' => 'required|array',
-        'categories.*.items.*.name' => 'required|string|max:255',
-        'categories.*.items.*.quantity' => 'required|integer|min:1',
-        'categories.*.items.*.price' => 'required|numeric|min:0',
-        'categories.*.items.*.description' => 'nullable|string',
-    ]);
-
-    $total = 0;
-
-    // Calculate total
-    foreach ($request->categories as $category) {
-        foreach ($category['items'] as $item) {
-            $total += $item['quantity'] * $item['price'];
+        // Group items by category id for modal
+        $itemsByCategory = [];
+        $items = InventoryItem::where('status', 'available')->get();
+        foreach ($categories as $category) {
+            $itemsByCategory[$category->id] = $items->where('inventory_category_id', $category->id)
+                ->map(function($item) {
+                    return [
+                        'id' => $item->id,
+                        'name' => $item->name,
+                        'price' => (float)$item->selling_price,
+                    ];
+                })->values()->toArray();
         }
+
+        return view('funeral.packages.create', compact('categories', 'itemsByCategory'));
     }
 
-    // Create package
-    $package = ServicePackage::create([
-        'funeral_home_id' => Auth::id(),
-        'name' => $request->name,
-        'description' => $request->description,
-        'total_price' => $total,
-    ]);
-
-    // Create categories and items
-    foreach ($request->categories as $categoryData) {
-        $category = PackageCategory::create([
-            'service_package_id' => $package->id,
-            'name' => $categoryData['name'],
+    public function store(Request $request)
+    {
+        // Validate package info
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'items' => ['required', 'array'],
         ]);
 
-        foreach ($categoryData['items'] as $itemData) {
-            CategoryItem::create([
-                'package_category_id' => $category->id,
-                'name' => $itemData['name'],
-                'quantity' => $itemData['quantity'],
-                'price' => $itemData['price'],
-                'description' => $itemData['description'] ?? null,
-            ]);
+        $items = $request->input('items');
+        $totalPrice = 0;
+        $packageItemsData = [];
+
+        foreach ($items as $catId => $catItems) {
+            foreach ($catItems as $itemData) {
+                // Validate existence and get price from DB
+                $item = InventoryItem::findOrFail($itemData['id']);
+                $qty = max(1, intval($itemData['quantity']));
+                $price = $item->selling_price * $qty;
+                $totalPrice += $price;
+                $packageItemsData[] = [
+                    'inventory_item_id' => $item->id,
+                    'quantity' => $qty,
+                ];
+            }
         }
+
+        // Create package and attach items (within transaction)
+        DB::beginTransaction();
+        try {
+            $package = ServicePackage::create([
+                'funeral_home_id' => auth()->id(), // adjust as needed
+                'name' => $request->name,
+                'description' => $request->description,
+                'total_price' => $totalPrice,
+            ]);
+
+            foreach ($packageItemsData as $data) {
+                $package->items()->attach($data['inventory_item_id'], ['quantity' => $data['quantity']]);
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => 'Failed to create package: ' . $e->getMessage()]);
+        }
+
+        return redirect()->route('funeral.packages.index')
+            ->with('success', 'Package created successfully!');
     }
-
-    return redirect()->route('packages.create')->with('success', 'Package created successfully!');
-}
-
-public function destroy($id)
-{
-    // Find the service package by ID or fail with 404
-    $package = ServicePackage::findOrFail($id);
-
-    // Optional: Add authorization check here to ensure the user owns this package
-    if ($package->funeral_home_id !== auth()->id()) {
-        abort(403, 'Unauthorized action.');
-    }
-
-    // Delete the package — cascades to categories and items via DB constraints
-    $package->delete();
-
-    // Redirect back with a success message
-    return redirect()->route('funeral.packages.index')->with('success', 'Package deleted successfully.');
-}
-
 
 public function edit($id)
 {
-    $package = ServicePackage::with('categories.items')->findOrFail($id);
+    $package = ServicePackage::with(['items.category'])->where('funeral_home_id', auth()->id())->findOrFail($id);
 
-    if ($package->funeral_home_id !== auth()->id()) {
-        abort(403);
+    // All categories and items (grouped by category)
+    $categories = InventoryCategory::all();
+    $itemsByCategory = [];
+    $items = InventoryItem::where('status', 'available')->get();
+    foreach ($categories as $category) {
+        $itemsByCategory[$category->id] = $items->where('inventory_category_id', $category->id)
+            ->map(fn($item) => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'price' => (float)$item->selling_price,
+            ])->values()->toArray();
     }
 
-    return view('funeral.packages.edit', [
-        'package' => $package,
-    ]);
+    // Prepare current selection structure for JS
+    $currentSelection = [];
+    foreach ($package->items as $item) {
+        $catId = $item->category->id ?? null;
+        if (!$catId) continue;
+        $currentSelection[$catId][] = [
+            'id' => $item->id,
+            'name' => $item->name,
+            'price' => (float)$item->selling_price,
+            'quantity' => $item->pivot->quantity ?? 1,
+        ];
+    }
 
+    return view('funeral.packages.edit', compact('package', 'categories', 'itemsByCategory', 'currentSelection'));
 }
-
-
 
 public function update(Request $request, $id)
 {
-    $request->validate([
-        'name' => 'required|string|max:255',
-        'description' => 'nullable|string',
-        'categories' => 'required|array',
-        'categories.*.name' => 'required|string|max:255',
-        'categories.*.items' => 'required|array',
-        'categories.*.items.*.name' => 'required|string|max:255',
-        'categories.*.items.*.quantity' => 'required|integer|min:1',
-        'categories.*.items.*.price' => 'required|numeric|min:0',
-        'categories.*.items.*.description' => 'nullable|string',
+    $validated = $request->validate([
+        'name' => ['required', 'string', 'max:255'],
+        'description' => ['nullable', 'string'],
+        'items' => ['required', 'array'],
     ]);
 
-    $package = ServicePackage::with('categories.items')->findOrFail($id);
+    $package = ServicePackage::where('funeral_home_id', auth()->id())->findOrFail($id);
 
-    if ($package->funeral_home_id !== auth()->id()) {
-        abort(403, 'Unauthorized action.');
-    }
+    $items = $request->input('items');
+    $totalPrice = 0;
+    $syncData = [];
 
-    // Calculate new total price
-    $total = 0;
-    foreach ($request->categories as $category) {
-        foreach ($category['items'] as $item) {
-            $total += $item['quantity'] * $item['price'];
+    foreach ($items as $catId => $catItems) {
+        foreach ($catItems as $itemData) {
+            $item = InventoryItem::findOrFail($itemData['id']);
+            $qty = max(1, intval($itemData['quantity']));
+            $totalPrice += $item->selling_price * $qty;
+            $syncData[$item->id] = ['quantity' => $qty];
         }
     }
 
-    // Update package
     $package->update([
         'name' => $request->name,
         'description' => $request->description,
-        'total_price' => $total,
+        'total_price' => $totalPrice,
     ]);
-
-    // Delete old categories and their items
-    foreach ($package->categories as $category) {
-        $category->items()->delete();
-    }
-    $package->categories()->delete();
-
-    // Recreate categories and items from request
-    foreach ($request->categories as $categoryData) {
-        $category = PackageCategory::create([
-            'service_package_id' => $package->id,
-            'name' => $categoryData['name'],
-        ]);
-
-        foreach ($categoryData['items'] as $itemData) {
-            CategoryItem::create([
-                'package_category_id' => $category->id,
-                'name' => $itemData['name'],
-                'quantity' => $itemData['quantity'],
-                'price' => $itemData['price'],
-                'description' => $itemData['description'] ?? null,
-            ]);
-        }
-    }
+    $package->items()->sync($syncData);
 
     return redirect()->route('funeral.packages.index')->with('success', 'Package updated successfully!');
 }
 
+public function destroy($id)
+{
+    $package = \App\Models\ServicePackage::where('funeral_home_id', auth()->id())->findOrFail($id);
+
+    // Optional: detach all related items (not required if set up for cascade delete)
+    $package->items()->detach();
+
+    $package->delete();
+
+    return redirect()->route('funeral.packages.index')
+        ->with('success', 'Package deleted successfully!');
+}
+
+
 
 }
+

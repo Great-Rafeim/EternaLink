@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ClientController;
 use App\Http\Controllers\AdminUserManagementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ClientDashboardController;
@@ -14,6 +15,13 @@ use App\Http\Controllers\PlotController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\TwoFactorController;
+use App\Http\Controllers\InventoryItemController;
+use App\Http\Controllers\FuneralNotificationController;
+use App\Http\Controllers\InventoryCategoryController;
+use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\StaffController;
+
+
 
 
 // 2FA setup and disable routes (accessible after login)
@@ -105,18 +113,63 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
 // Funeral Routes
 Route::prefix('funeral')->name('funeral.')->middleware(['auth', 'verified', 'role:funeral'])->group(function () {
     Route::resource('packages', PackageController::class);
-    Route::resource('schedules', ScheduleController::class);
+    Route::resource('schedules', \App\Http\Controllers\ScheduleController::class)->names('funeral.schedules');
     Route::resource('clients', ClientController::class);
     Route::resource('staff', StaffController::class);
 });
-
-
 
 Route::middleware(['auth', 'verified', 'role:funeral'])->group(function () {
     Route::get('/funeral/packages/create', [PackageController::class, 'create'])->name('packages.create');
     Route::post('/funeral/packages', [PackageController::class, 'store'])->name('packages.store');
 
 });
+
+
+Route::prefix('funeral')
+    ->middleware(['auth', 'verified', 'role:funeral'])
+    ->name('funeral.')
+    ->group(function () {
+
+        Route::resource('schedules', ScheduleController::class);
+
+        //packages
+        Route::resource('packages', \App\Http\Controllers\PackageController::class);
+
+
+        // Inventory Items
+        Route::resource('items', InventoryItemController::class);
+        Route::post('/items/{item}/adjust-stock', [InventoryItemController::class, 'adjustStock'])->name('items.adjustStock');
+        Route::get('/items/{item}/movements', [InventoryItemController::class, 'movements'])->name('items.movements');
+        Route::get('/items-export', [InventoryItemController::class, 'export'])->name('items.export');
+
+
+        // Inventory Categories
+        Route::resource('categories', InventoryCategoryController::class);
+
+        // Notifications (inline handling)
+        Route::post('/notifications/{id}/read', function ($id) {
+            $notification = auth()->user()->notifications()->findOrFail($id);
+            $notification->markAsRead();
+            return back();
+        })->name('notifications.read');
+
+        Route::get('/notifications', function () {
+            $user = auth()->user();
+            return view('funeral.notifications.index', [
+                'unread' => $user->unreadNotifications,
+                'read' => $user->readNotifications()->latest()->take(20)->get(),
+            ]);
+        })->name('notifications.index');
+
+        // Optional explicit controller route (if needed elsewhere)
+        Route::get('/funeral/notifications', [FuneralNotificationController::class, 'index'])
+            ->name('notifications.index.controller');
+    });
+
+
+
+
+
 
 //Cemetery Routes
 Route::prefix('cemetery')->middleware(['auth', 'verified', 'role:cemetery'])->group(function () {

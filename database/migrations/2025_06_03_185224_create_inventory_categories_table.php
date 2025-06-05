@@ -11,22 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('login_histories', function (Blueprint $table) {
+        Schema::create('inventory_categories', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('funeral_home_id');
-            $table->string('ip_address')->nullable();
-            $table->text('user_agent')->nullable();
+            $table->string('name');
+            $table->text('description')->nullable();
             $table->timestamps();
-
-            $table->foreign('funeral_home_id')->references('id')->on('users')->onDelete('cascade');
         });
     }
+
 
     /**
      * Reverse the migrations.
      */
     public function down(): void
     {
-        Schema::dropIfExists('login_histories');
+        Schema::dropIfExists('inventory_categories');
     }
 };

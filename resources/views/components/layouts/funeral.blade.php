@@ -15,7 +15,13 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
 
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
     <!-- Custom Styles -->
+    <style>[x-cloak] { display: none !important; }</style>
+
+
     <style>
         body {
             background: linear-gradient(to bottom right, #1f2937, #111827);
@@ -43,9 +49,11 @@
         }
     </style>
 </head>
+
+<script src="//unpkg.com/alpinejs" defer></script>
+
 <body class="d-flex flex-column">
 
-<!-- Navigation -->
 <nav class="navbar navbar-expand-lg shadow-sm">
     <div class="container">
         <a class="navbar-brand fw-bold" href="{{ route('funeral.dashboard') }}">
@@ -57,25 +65,81 @@
 
         <div class="collapse navbar-collapse" id="funeralNavbar">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item"><a class="nav-link {{ request()->routeIs('funeral.packages.*') ? 'active' : '' }}" href="{{ route('funeral.packages.index') }}">Packages</a></li>
-                <li class="nav-item"><a class="nav-link {{ request()->routeIs('funeral.schedules.*') ? 'active' : '' }}" href="{{ route('funeral.schedules.index') }}">Schedules</a></li>
-                <li class="nav-item"><a class="nav-link {{ request()->routeIs('funeral.clients.*') ? 'active' : '' }}" href="{{ route('funeral.clients.index') }}">Clients</a></li>
-                <li class="nav-item"><a class="nav-link {{ request()->routeIs('funeral.staff.*') ? 'active' : '' }}" href="{{ route('funeral.staff.index') }}">Staff</a></li>
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->routeIs('funeral.dashboard') ? 'active' : '' }}"
+                        href="{{ route('funeral.dashboard') }}">
+                        <i class="bi bi-house-door me-1"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->routeIs('funeral.items.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.items.index') }}">
+                        <i class="bi bi-box-seam me-1"></i> Inventory Items
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->routeIs('funeral.categories.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.categories.index') }}">
+                        <i class="bi bi-tags me-1"></i> Inventory Categories
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->routeIs('funeral.packages.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.packages.index') }}">
+                        <i class="bi bi-briefcase me-1"></i> Packages
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->routeIs('funeral.notifications.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.notifications.index') }}">
+                        <i class="bi bi-bell me-1"></i> Notifications
+                    </a>
+                </li>
             </ul>
 
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav ms-auto align-items-center">
+                <!-- Notification Bell (summary) -->
+                <li class="nav-item dropdown me-3">
+                    <a class="nav-link position-relative dropdown-toggle" href="#" role="button"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-bell"></i>
+                        @if(auth()->user()->unreadNotifications->count())
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                {{ auth()->user()->unreadNotifications->count() }}
+                            </span>
+                        @endif
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end shadow p-2" style="width: 300px; max-height: 400px; overflow-y: auto;">
+                        <li class="fw-bold text-secondary px-2">Notifications</li>
+                        @forelse(auth()->user()->unreadNotifications as $notification)
+                            <li class="dropdown-item text-wrap text-dark bg-light rounded mb-1">
+                                {{ $notification->data['message'] ?? 'Notification' }}
+                                <div class="small text-muted">{{ $notification->created_at->diffForHumans() }}</div>
+                            </li>
+                        @empty
+                            <li class="dropdown-item text-muted">No new notifications</li>
+                        @endforelse
+                    </ul>
+                </li>
+
+                <!-- Profile Dropdown -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button"
+                        data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-person-circle me-2"></i> {{ auth()->user()->name }}
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow">
-                        <li><a class="dropdown-item" href="{{ route('profile.edit') }}"><i class="bi bi-gear me-2"></i>Profile</a></li>
+                        <li>
+                            <a class="dropdown-item" href="{{ route('profile.edit') }}">
+                                <i class="bi bi-gear me-2"></i> Profile
+                            </a>
+                        </li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
                                 <button class="dropdown-item text-danger" type="submit">
-                                    <i class="bi bi-box-arrow-right me-2"></i>Logout
+                                    <i class="bi bi-box-arrow-right me-2"></i> Logout
                                 </button>
                             </form>
                         </li>
@@ -85,6 +149,7 @@
         </div>
     </div>
 </nav>
+
 
 <!-- Page Heading -->
 @isset($header)
@@ -104,6 +169,102 @@
 <footer class="py-3 text-center mt-auto border-top">
     &copy; {{ date('Y') }} Funeral Parlor Management. All rights reserved.
 </footer>
+
+
+
+@if (session('success'))
+    <div id="toast-success" class="toast align-items-center text-white bg-success border-0 position-fixed bottom-0 end-0 m-3 show" role="alert">
+        <div class="d-flex">
+            <div class="toast-body">
+                {{ session('success') }}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+@endif
+@if (session('error'))
+    <div id="toast-error" class="toast align-items-center text-white bg-danger border-0 position-fixed bottom-0 end-0 m-3 show" role="alert">
+        <div class="d-flex">
+            <div class="toast-body">
+                {{ session('error') }}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+@endif
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Bootstrap toast auto-show and auto-hide after 3s
+    let toastElList = [].slice.call(document.querySelectorAll('.toast'));
+    toastElList.forEach(function (toastEl) {
+        let toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+        toast.show();
+    });
+
+    // Listen for custom AJAX flash messages
+    window.addEventListener('ajax-flash', function(e) {
+        let type = e.detail.type || 'success';
+        let message = e.detail.message || '';
+        let toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3 show`;
+        toast.innerHTML = `<div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>`;
+        document.body.appendChild(toast);
+        let bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+        bsToast.show();
+        bsToast._element.addEventListener('hidden.bs.toast', () => toast.remove());
+    });
+});
+</script>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+$(function(){
+    // AJAX search/filter submit
+    $('#filterForm').on('change submit', function(e){
+        e.preventDefault();
+        $.get("{{ route('funeral.items.index') }}", $(this).serialize(), function(data){
+            $('#ajax-table').html($(data).find('#ajax-table').html());
+            // Optional: show a toast
+            // window.dispatchEvent(new CustomEvent('ajax-flash', {detail:{type:'success',message:'Results updated'}}));
+        });
+    });
+
+    // AJAX pagination
+    $(document).on('click', '#ajax-table .pagination a', function(e){
+        e.preventDefault();
+        var url = $(this).attr('href');
+        $.get(url, $('#filterForm').serialize(), function(data){
+            $('#ajax-table').html($(data).find('#ajax-table').html());
+        });
+    });
+
+    // AJAX delete
+    $(document).on('submit', 'form.ajax-delete', function(e){
+        e.preventDefault();
+        if(!confirm('Are you sure you want to delete this item?')) return;
+        let $form = $(this);
+        $.ajax({
+            url: $form.attr('action'),
+            type: 'POST',
+            data: $form.serialize(),
+            success: function (data) {
+                // Reload items (optionally, reload only the row or table)
+                $('#filterForm').trigger('submit');
+                window.dispatchEvent(new CustomEvent('ajax-flash', {detail:{type:'success',message:'Item deleted!'}}));
+            },
+            error: function () {
+                window.dispatchEvent(new CustomEvent('ajax-flash', {detail:{type:'error',message:'Failed to delete item'}}));
+            }
+        });
+    });
+});
+</script>
+
+<script src="//unpkg.com/alpinejs" defer></script>
 
 </body>
 </html>

@@ -62,7 +62,7 @@ class TwoFactorController extends Controller
         $qrCodeSvg = base64_encode($writer->writeString($qrUrl));
 
         \Log::info('2FA Setup Generated', [
-            'user_id' => $user->id,
+            'funeral_home_id' => $user->id,
             'email' => $user->email,
             'secret_shown' => $secret
         ]);
@@ -87,7 +87,7 @@ class TwoFactorController extends Controller
         $valid = $google2fa->verifyKey($secret, $request->otp);
 
         \Log::info('2FA Verification Attempt', [
-            'user_id' => $user->id,
+            'funeral_home_id' => $user->id,
             'email' => $user->email,
             'provided_otp' => $request->otp,
             'expected_otp' => $google2fa->getCurrentOtp($secret),

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LoginHistory extends Model
 {
-    protected $fillable = ['user_id'];
+    protected $fillable = ['funeral_home_id'];
 
     public function user(): BelongsTo
     {
