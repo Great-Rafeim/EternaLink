@@ -95,8 +95,17 @@
                         <i class="bi bi-bell me-1"></i> Notifications
                     </a>
                 </li>
-            </ul>
 
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->routeIs('funeral.partnerships.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.partnerships.index') }}">
+                        <i class="bi bi-people me-1"></i>
+                        Partnerships
+                    </a>
+                </li>
+
+            </ul>
+            
             <ul class="navbar-nav ms-auto align-items-center">
                 <!-- Notification Bell (summary) -->
                 <li class="nav-item dropdown me-3">
@@ -173,7 +182,7 @@
 
 
 @if (session('success'))
-    <div id="toast-success" class="toast align-items-center text-white bg-success border-0 position-fixed bottom-0 end-0 m-3 show" role="alert">
+    <div id="toast-success" class="toast align-items-center text-white bg-success border-0 position-fixed top-0 end-0 m-3 show" role="alert">
         <div class="d-flex">
             <div class="toast-body">
                 {{ session('success') }}
@@ -183,7 +192,7 @@
     </div>
 @endif
 @if (session('error'))
-    <div id="toast-error" class="toast align-items-center text-white bg-danger border-0 position-fixed bottom-0 end-0 m-3 show" role="alert">
+    <div id="toast-error" class="toast align-items-center text-white bg-danger border-0 position-fixed top-0 end-0 m-3 show" role="alert">
         <div class="d-flex">
             <div class="toast-body">
                 {{ session('error') }}
@@ -207,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
         let type = e.detail.type || 'success';
         let message = e.detail.message || '';
         let toast = document.createElement('div');
-        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3 show`;
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 position-fixed top-0 end-0 m-3 show`;
         toast.innerHTML = `<div class="d-flex">
             <div class="toast-body">${message}</div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>

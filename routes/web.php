@@ -20,6 +20,8 @@ use App\Http\Controllers\FuneralNotificationController;
 use App\Http\Controllers\InventoryCategoryController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\StaffController;
+use App\Http\Controllers\PartnershipController;
+
 
 
 
@@ -134,6 +136,16 @@ Route::prefix('funeral')
 
         //packages
         Route::resource('packages', \App\Http\Controllers\PackageController::class);
+        
+        //partnerships
+        Route::resource('partnerships', PartnershipController::class)->only(['index']);
+        Route::get('partnerships/find', [PartnershipController::class, 'find'])->name('partnerships.find');
+        Route::post('partnerships/request', [PartnershipController::class, 'sendRequest'])->name('partnerships.request');
+        Route::delete('partnerships/{partnership}', [PartnershipController::class, 'destroy'])->name('partnerships.destroy');
+        Route::post('partnerships/{partnership}/respond', [PartnershipController::class, 'respond'])->name('partnerships.respond');
+        Route::delete('partnerships/{partnership}', [PartnershipController::class, 'destroy'])->name('partnerships.destroy');
+
+
 
 
         // Inventory Items

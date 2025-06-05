@@ -70,4 +70,26 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(ServicePackage::class, 'funeral_home_id');
     }
 
+        // Partnership requests sent by this user (as funeral parlor)
+    public function sentPartnershipRequests()
+    {
+        return $this->hasMany(Partnership::class, 'requester_id');
+    }
+
+    // Partnership requests received by this user (as funeral parlor)
+    public function receivedPartnershipRequests()
+    {
+        return $this->hasMany(Partnership::class, 'partner_id');
+    }
+
+    // All partnerships where this user is involved and accepted
+    public function partnerships()
+    {
+        return Partnership::where(function ($query) {
+                $query->where('requester_id', $this->id)
+                    ->orWhere('partner_id', $this->id);
+            })->where('status', 'accepted');
+    }
+
+
 }
