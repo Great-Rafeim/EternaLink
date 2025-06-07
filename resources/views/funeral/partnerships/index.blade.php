@@ -1,10 +1,16 @@
 <x-layouts.funeral>
-    <div class="container py-4">
+
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 class="text-white mb-0">Partnerships</h2>
-            <a href="{{ route('funeral.partnerships.find') }}" class="btn btn-primary">
-                <i class="bi bi-search me-1"></i> Find Partners
-            </a>
+            <div>
+                <a href="{{ route('funeral.partnerships.resource_requests.index') }}" class="btn btn-warning me-2">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>
+                    View Resource Requests
+                </a>
+                <a href="{{ route('funeral.partnerships.find') }}" class="btn btn-primary">
+                    <i class="bi bi-search me-1"></i> Find Partners
+                </a>
+            </div>
         </div>
 
 

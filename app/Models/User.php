@@ -90,6 +90,10 @@ class User extends Authenticatable implements MustVerifyEmail
                     ->orWhere('partner_id', $this->id);
             })->where('status', 'accepted');
     }
+    public function scopeFuneral($query)
+    {
+        return $query->where('role', 'funeral');
+    }
 
 
 }

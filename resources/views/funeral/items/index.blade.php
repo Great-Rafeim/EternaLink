@@ -7,6 +7,10 @@
                     <i class="bi bi-download"></i> Export CSV
                 </a>
                 <a href="{{ route('funeral.items.create') }}" class="btn btn-success mb-2">+ Add Item</a>
+                <a href="{{ route('funeral.partnerships.resource_requests.index') }}" class="btn btn-warning mb-2">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>
+                    View Resource Requests
+                </a>
             </div>
         </div>
 

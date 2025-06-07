@@ -68,7 +68,6 @@
                                 @error('low_stock_threshold') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                             </div>
 
-
                             <div class="mb-3">
                                 <label class="form-label">Price</label>
                                 <input type="number" step="0.01" name="price" value="{{ old('price', $item->price ?? '') }}"
@@ -76,29 +75,45 @@
                                 @error('price') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                             </div>
 
-                            <div class="col-md-6">
-                                <label class="form-label text-white">Selling Price</label>
-                                <input type="number" step="0.01" name="selling_price"
-                                    value="{{ old('selling_price', $inventoryItem->selling_price ?? '') }}"
-                                    class="form-control bg-dark text-white border-secondary">
-                                @error('selling_price') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label text-white">Selling Price</label>
+                                    <input type="number" step="0.01" name="selling_price"
+                                        value="{{ old('selling_price', $item->selling_price ?? '') }}"
+                                        class="form-control bg-dark text-white border-secondary">
+                                    @error('selling_price') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label text-white">Expiry Date (optional)</label>
+                                    <input type="date" name="expiry_date"
+                                        value="{{ old('expiry_date', $item->expiry_date ?? '') }}"
+                                        class="form-control bg-dark text-white border-secondary">
+                                    @error('expiry_date') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                                </div>
                             </div>
 
-                            <div class="col-md-6">
-                                <label class="form-label text-white">Expiry Date (optional)</label>
-                                <input type="date" name="expiry_date"
-                                    value="{{ old('expiry_date', isset($inventoryItem) ? $inventoryItem->expiry_date : '') }}"
-                                    class="form-control bg-dark text-white border-secondary">
-                                @error('expiry_date') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                            <div class="row align-items-center mb-3">
+                                <!-- Shareable Toggle -->
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input bg-secondary border-0" type="checkbox" name="shareable" value="1"
+                                            id="shareableSwitch"
+                                            {{ old('shareable', $item->shareable ?? false) ? 'checked' : '' }}>
+                                        <label class="form-check-label text-white" for="shareableSwitch">Mark as shareable</label>
+                                    </div>
+                                </div>
+
+                                <!-- Shareable Quantity (show if checked or previously marked as shareable) -->
+                                <div class="col-md-6" id="shareableQtyGroup"
+                                    style="{{ old('shareable', $item->shareable ?? false) ? '' : 'display:none;' }}">
+                                    <label for="shareable_quantity" class="form-label text-white">Shareable Quantity</label>
+                                    <input type="number" min="1" class="form-control"
+                                        id="shareable_quantity" name="shareable_quantity"
+                                        value="{{ old('shareable_quantity', $item->shareable_quantity ?? '') }}">
+                                    <div class="form-text text-light">How many units from your stock can be shared with partners?</div>
+                                </div>
                             </div>
 
-
-                            <div class="mb-4 form-check form-switch">
-                                <input class="form-check-input bg-secondary border-0" type="checkbox" name="shareable" value="1"
-                                    id="shareableSwitch"
-                                    {{ old('shareable', $item->shareable ?? false) ? 'checked' : '' }}>
-                                <label class="form-check-label" for="shareableSwitch">Mark as shareable</label>
-                            </div>
 
                             <div class="d-flex justify-content-end">
                                 <a href="{{ route('funeral.items.index') }}" class="btn btn-outline-light me-2">Cancel</a>
@@ -113,4 +128,18 @@
             </div>
         </div>
     </div>
+
+<script>
+    function toggleShareableQty() {
+        var shareableCheckbox = document.getElementById('shareableSwitch');
+        var qtyGroup = document.getElementById('shareableQtyGroup');
+        qtyGroup.style.display = shareableCheckbox.checked ? 'block' : 'none';
+    }
+
+    document.getElementById('shareableSwitch').addEventListener('change', toggleShareableQty);
+    window.addEventListener('DOMContentLoaded', function() {
+        toggleShareableQty(); // This will respect the initial state!
+    });
+</script>
+
 </x-layouts.funeral>

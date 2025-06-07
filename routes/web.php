@@ -21,10 +21,12 @@ use App\Http\Controllers\InventoryCategoryController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\PartnershipController;
+use App\Http\Controllers\ResourceRequestController;
 
 
-
-
+Route::get('/', function () {
+    return view('welcome');
+});
 
 // 2FA setup and disable routes (accessible after login)
 Route::middleware(['auth'])->group(function () {
@@ -53,41 +55,32 @@ Route::middleware(['auth', '2fa'])->group(function () {
     })->name('dashboard');
 });
 
-
-
-Route::get('/', function () {
-    return view('welcome');
-});
-
-
-
-
-Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+Route::middleware(['auth', '2fa', 'verified', 'role:admin'])->group(function () {
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
 });
 
-Route::middleware(['auth', 'verified', 'role:client'])->group(function () {
+Route::middleware(['auth', '2fa', 'verified', 'role:client'])->group(function () {
     Route::get('/client/dashboard', [ClientDashboardController::class, 'index'])->name('client.dashboard');
 });
 
-Route::middleware(['auth', 'verified', 'role:funeral'])->group(function () {
+Route::middleware(['auth', '2fa', 'verified', 'role:funeral'])->group(function () {
     Route::get('/funeral/dashboard', [FuneralDashboardController::class, 'index'])->name('funeral.dashboard');
 });
 
-Route::middleware(['auth', 'verified', 'role:cemetery'])->group(function () {
+Route::middleware(['auth', '2fa', 'verified', 'role:cemetery'])->group(function () {
     Route::get('/cemetery/dashboard', [CemeteryDashboardController::class, 'index'])->name('cemetery.dashboard');
 });
 
 
 // Profile routes (restricted to admin users)
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', '2fa', 'verified'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 // Admin routes (restricted to admin users)
-Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+Route::middleware(['auth', 'verified', '2fa', 'role:admin'])->group(function () {
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
     Route::get('/admin/login-history', [AdminDashboardController::class, 'loginHistory'])->name('admin.login-history');
 
@@ -113,14 +106,14 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
 });
 
 // Funeral Routes
-Route::prefix('funeral')->name('funeral.')->middleware(['auth', 'verified', 'role:funeral'])->group(function () {
+Route::prefix('funeral')->name('funeral.')->middleware(['auth', 'verified', '2fa', 'role:funeral'])->group(function () {
     Route::resource('packages', PackageController::class);
     Route::resource('schedules', \App\Http\Controllers\ScheduleController::class)->names('funeral.schedules');
     Route::resource('clients', ClientController::class);
     Route::resource('staff', StaffController::class);
 });
 
-Route::middleware(['auth', 'verified', 'role:funeral'])->group(function () {
+Route::middleware(['auth', 'verified', '2fa', 'role:funeral'])->group(function () {
     Route::get('/funeral/packages/create', [PackageController::class, 'create'])->name('packages.create');
     Route::post('/funeral/packages', [PackageController::class, 'store'])->name('packages.store');
 
@@ -148,6 +141,7 @@ Route::prefix('funeral')
 
 
 
+
         // Inventory Items
         Route::resource('items', InventoryItemController::class);
         Route::post('/items/{item}/adjust-stock', [InventoryItemController::class, 'adjustStock'])->name('items.adjustStock');
@@ -157,6 +151,24 @@ Route::prefix('funeral')
 
         // Inventory Categories
         Route::resource('categories', InventoryCategoryController::class);
+
+        // Resource Sharing
+        Route::get('/funeral/resource-requests/request/{id}', [App\Http\Controllers\ResourceShareController::class, 'showShareableItems'])->name('partnerships.resource_requests.request');
+        Route::post('/funeral/resource-requests/send-request/{item}/{shareable}', [App\Http\Controllers\ResourceShareController::class, 'sendRequest'])->name('partnerships.resource_requests.sendRequest');
+        Route::get('/funeral/resource-requests/request/{requested}/{provider}', [App\Http\Controllers\ResourceShareController::class, 'createRequestForm'])->name('partnerships.resource_requests.createRequestForm');
+        Route::post('/funeral/resource-requestss/request', [App\Http\Controllers\ResourceShareController::class, 'storeRequest'])->name('partnerships.resource_requests.storeRequest');
+        Route::get('/funeral/resource-requests', [App\Http\Controllers\ResourceRequestController::class, 'index'])->name('partnerships.resource_requests.index');
+
+        Route::get('resource-requests', [ResourceRequestController::class, 'index'])->name('partnerships.resource_requests.index');
+        Route::get('resource-requests/{id}', [ResourceRequestController::class, 'show'])->name('partnerships.resource_requests.show');
+        Route::patch('resource-requests/{id}/cancel', [ResourceRequestController::class, 'cancel'])->name('partnerships.resource_requests.cancel');
+        Route::patch('resource-requests/{id}/approve', [ResourceRequestController::class, 'approve'])->name('partnerships.resource_requests.approve');
+        Route::patch('resource-requests/{id}/reject', [ResourceRequestController::class, 'reject'])->name('partnerships.resource_requests.reject');
+        Route::patch('resource-requests/{id}/cancel', [ResourceRequestController::class, 'cancel'])->name('partnerships.resource_requests.cancel');
+        Route::patch('resource-requests/{id}/fulfill', [ResourceRequestController::class, 'fulfill'])->name('partnerships.resource_requests.fulfill');
+
+
+
 
         // Notifications (inline handling)
         Route::post('/notifications/{id}/read', function ($id) {
@@ -178,23 +190,12 @@ Route::prefix('funeral')
             ->name('notifications.index.controller');
     });
 
-
-
-
-
-
 //Cemetery Routes
 Route::prefix('cemetery')->middleware(['auth', 'verified', 'role:cemetery'])->group(function () {
     Route::resource('plots', PlotController::class);
     Route::put('/plots/{plot}/update-reservation', [PlotController::class, 'updateReservation'])->name('plots.updateReservation');
     Route::put('/plots/{plot}/update-occupation', [PlotController::class, 'updateOccupation'])->name('plots.updateOccupation');
     Route::put('/plots/{plot}/mark-available', [PlotController::class, 'markAvailable'])->name('plots.markAvailable');
-});
-
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/profile/security', function () {
-        return view('profile.security');
-    })->name('profile.security');
 });
 
 require __DIR__.'/auth.php';

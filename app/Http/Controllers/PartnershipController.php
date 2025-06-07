@@ -41,22 +41,17 @@ class PartnershipController extends Controller
     {
         $user = auth()->user();
 
-        $alreadyPartneredIds = Partnership::where(function($q) use ($user) {
-                $q->where('requester_id', $user->id)
-                ->orWhere('partner_id', $user->id);
-            })
-            ->whereIn('status', ['pending', 'accepted']) // Only block pending/accepted
-            ->pluck('requester_id')
+        $alreadyPartneredIds = Partnership::where('requester_id', $user->id)
+            ->whereIn('status', ['pending', 'accepted'])
+            ->pluck('partner_id')
             ->merge(
-                Partnership::where(function($q) use ($user) {
-                    $q->where('requester_id', $user->id)
-                    ->orWhere('partner_id', $user->id);
-                })
-                ->whereIn('status', ['pending', 'accepted']) // Only block pending/accepted
-                ->pluck('partner_id')
+                Partnership::where('partner_id', $user->id)
+                    ->whereIn('status', ['pending', 'accepted'])
+                    ->pluck('requester_id')
             )
             ->unique()
             ->push($user->id);
+
 
         $query = User::where('role', 'funeral')
                      ->whereNotIn('id', $alreadyPartneredIds);
@@ -78,10 +73,14 @@ class PartnershipController extends Controller
         $user = auth()->user();
 
         $exists = Partnership::where(function($q) use ($user, $request) {
-            $q->where('requester_id', $user->id)->where('partner_id', $request->partner_id);
-        })->orWhere(function($q) use ($user, $request) {
-            $q->where('requester_id', $request->partner_id)->where('partner_id', $user->id);
-        })->exists();
+            $q->where(function($query) use ($user, $request) {
+                $query->where('requester_id', $user->id)
+                    ->where('partner_id', $request->partner_id);
+            })->orWhere(function($query) use ($user, $request) {
+                $query->where('requester_id', $request->partner_id)
+                    ->where('partner_id', $user->id);
+            });
+        })->whereIn('status', ['pending', 'accepted'])->exists();
 
         if ($exists) {
             return back()->with('error', 'Partnership already exists or is pending.');
@@ -95,6 +94,8 @@ class PartnershipController extends Controller
 
         return back()->with('success', 'Partnership request sent!');
     }
+
+
 
     public function destroy($id)
     {

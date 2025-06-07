@@ -17,6 +17,7 @@ class InventoryItem extends Model
         'price',
         'selling_price',
         'shareable',
+        'shareable_quantity',
         'expiry_date', // if you added this
     ];
 
@@ -44,4 +45,12 @@ class InventoryItem extends Model
             'service_package_id'
         )->withPivot('quantity')->withTimestamps();
     }
+
+    public function funeralUser()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'funeral_home_id');
+    }
+
+
+
 }

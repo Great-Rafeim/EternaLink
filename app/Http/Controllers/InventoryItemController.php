@@ -72,13 +72,18 @@ class InventoryItemController extends Controller
             'selling_price'         => 'nullable|numeric|min:0',
             'expiry_date' => 'nullable|date|after_or_equal:today',
             'shareable'             => 'boolean',
+            'shareable_quantity' => 'nullable|integer|min:1',
             'low_stock_threshold'   => 'required|integer|min:1',
         ]);
+
+        $validated['shareable'] = $request->has('shareable') ? 1 : 0;
+        if (!$validated['shareable']) {
+            $validated['shareable_quantity'] = null;
+        }
 
         $item = new InventoryItem($validated);
         $item->funeral_home_id = auth()->id();
         $item->save();
-
         // Alert if quantity is below or equal to threshold
         if ($item->quantity <= $item->low_stock_threshold) {
             User::where('role', 'funeral')->where('id', auth()->id())->each(function ($user) use ($item) {
@@ -122,8 +127,14 @@ class InventoryItemController extends Controller
             'selling_price'         => 'nullable|numeric|min:0',
             'expiry_date'           => 'nullable|date|after_or_equal:today',
             'shareable'             => 'boolean',
+            'shareable_quantity' => 'nullable|integer|min:1',
             'low_stock_threshold'   => 'required|integer|min:1',
         ]);
+
+        $validated['shareable'] = $request->has('shareable') ? 1 : 0;
+        if (!$validated['shareable']) {
+            $validated['shareable_quantity'] = null;
+        }
 
         $item->update($validated);
 
@@ -159,6 +170,9 @@ class InventoryItemController extends Controller
             'type'     => 'required|in:inbound,outbound',
             'quantity' => 'required|integer|min:1',
             'reason'   => 'nullable|string|max:255',
+        // 'shareable_quantity' => 'nullable|integer|min:1', // Only add this if you want to allow changing shareable_quantity here
+
+
         ]);
 
         $change = $validated['type'] === 'inbound' ? $validated['quantity'] : -$validated['quantity'];
@@ -171,6 +185,7 @@ class InventoryItemController extends Controller
             'quantity'          => $validated['quantity'],
             'reason'            => $validated['reason'],
             'funeral_home_id'   => auth()->id(),
+            'shareable_quantity' => $item->shareable_quantity,
         ]);
 
         // Alert if quantity is below or equal to threshold
@@ -179,6 +194,14 @@ class InventoryItemController extends Controller
                 $user->notify(new LowStockAlert($item));
             });
         }
+
+        if ($item->shareable) {
+            $item->shareable_quantity = $request->input('shareable_quantity', $item->shareable_quantity);
+        } else {
+            $item->shareable_quantity = null;
+        }
+        $item->save();
+
 
         return redirect()->back()->with('success', 'Stock adjusted successfully.');
     }
@@ -213,8 +236,9 @@ class InventoryItemController extends Controller
         $items = $query->get();
 
         $csvHeader = [
-            'ID', 'Name', 'Category', 'Brand', 'Quantity', 'Status', 'Price', 'Shareable', 'Created At'
+            'ID', 'Name', 'Category', 'Brand', 'Quantity', 'Status', 'Price', 'Selling Price', 'Shareable', 'Shareable Qty', 'Created At'
         ];
+
 
         $rows = [];
         foreach ($items as $item) {
@@ -226,7 +250,9 @@ class InventoryItemController extends Controller
                 $item->quantity,
                 $item->status,
                 $item->price,
+                $item->selling_price,         // <--- Added this line
                 $item->shareable ? 'Yes' : 'No',
+                $item->shareable_quantity ?? '-',
                 $item->created_at,
             ];
         }

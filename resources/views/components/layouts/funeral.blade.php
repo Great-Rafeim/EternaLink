@@ -14,6 +14,8 @@
     <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
 
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -274,6 +276,22 @@ $(function(){
 </script>
 
 <script src="//unpkg.com/alpinejs" defer></script>
+
+<script>
+    function toggleShareableQty() {
+        var shareableCheckbox = document.getElementById('shareable');
+        var qtyGroup = document.getElementById('shareableQtyGroup');
+        qtyGroup.style.display = shareableCheckbox.checked ? 'block' : 'none';
+    }
+
+    document.getElementById('shareable').addEventListener('change', toggleShareableQty);
+
+    // On page load: show if checked (e.g., during edit or validation error)
+    window.addEventListener('DOMContentLoaded', function() {
+        toggleShareableQty();
+    });
+</script>
+
 
 </body>
 </html>

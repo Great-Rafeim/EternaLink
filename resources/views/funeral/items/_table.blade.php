@@ -11,6 +11,7 @@
                 <th>Selling Price</th>
                 <th>Expiry Date</th>
                 <th>Status</th>
+                <th>Shareable Qty</th>
                 <th class="text-center">Actions</th>
             </tr>
         </thead>
@@ -61,6 +62,13 @@
                             {{ ucfirst(str_replace('_', ' ', $item->status)) }}
                         </span>
                     </td>
+                    <td>
+                        @if($item->shareable)
+                            <span class="badge bg-info text-dark">{{ $item->shareable_quantity ?? '-' }}</span>
+                        @else
+                            <span class="text-muted">N/A</span>
+                        @endif
+                    </td>
                     <td class="text-center">
                         <a href="{{ route('funeral.items.edit', $item) }}" class="btn btn-sm btn-outline-primary me-1">Edit</a>
                         <form action="{{ route('funeral.items.destroy', $item) }}" method="POST" class="d-inline ajax-delete" style="display:inline;">
@@ -68,11 +76,17 @@
                             @method('DELETE')
                             <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                         </form>
+                        @if ($item->quantity <= $item->low_stock_threshold)
+                            <a href="{{ route('funeral.partnerships.resource_requests.request', $item->id) }}"
+                               class="btn btn-sm btn-warning mt-1">
+                                Request
+                            </a>
+                        @endif
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="10" class="text-muted text-center">No inventory items found.</td>
+                    <td colspan="11" class="text-muted text-center">No inventory items found.</td>
                 </tr>
             @endforelse
         </tbody>

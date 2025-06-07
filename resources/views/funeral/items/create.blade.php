@@ -110,18 +110,26 @@
                                     @error('expiry_date') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
 
-
-
+                                <div class="row">
                                 <!-- Shareable -->
                                 <div class="col-md-6 d-flex align-items-center">
                                     <div class="form-check mt-3">
                                         <input type="checkbox" name="shareable" value="1" id="shareable"
-                                               class="form-check-input"
-                                               {{ old('shareable', $inventoryItem->shareable ?? false) ? 'checked' : '' }}>
+                                            class="form-check-input"
+                                            {{ old('shareable', $inventoryItem->shareable ?? false) ? 'checked' : '' }}>
                                         <label class="form-check-label text-white" for="shareable">
                                             Mark as shareable
                                         </label>
                                     </div>
+                                </div>
+
+                                <!-- Shareable Quantity (hidden by default) -->
+                                <div class="col-md-6" id="shareableQtyGroup" style="display:none;">
+                                    <label for="shareable_quantity" class="form-label text-white">Shareable Quantity</label>
+                                    <input type="number" min="1" class="form-control"
+                                        id="shareable_quantity" name="shareable_quantity"
+                                        value="{{ old('shareable_quantity', $inventoryItem->shareable_quantity ?? '') }}">
+                                    <div class="form-text text-light">How many units from your stock can be shared with partners?</div>
                                 </div>
                             </div>
 
