@@ -1,7 +1,6 @@
 <x-layouts.funeral>
     <div class="container py-4">
 
-
 @if ($errors->any())
     <div class="alert alert-danger">
         <ul>
@@ -12,9 +11,8 @@
     </div>
 @endif
 
-
         <h2 class="mb-4 text-white">Create Funeral Service Package</h2>
-        <form action="{{ route('funeral.packages.store') }}" method="POST" id="package-form">
+        <form action="{{ route('funeral.packages.store') }}" method="POST" id="package-form" enctype="multipart/form-data">
             @csrf
 
             {{-- Package Info --}}
@@ -22,6 +20,16 @@
                 <label class="form-label text-white">Package Name</label>
                 <input type="text" name="name" class="form-control" required value="{{ old('name') }}">
             </div>
+
+            <div class="mb-3">
+                <label class="form-label text-white">Package Image</label>
+                <input type="file" name="image" class="form-control" accept="image/*" onchange="previewImage(event)">
+                <div class="mt-2" id="image-preview">
+                    <div class="text-muted">No image selected.</div>
+                    <input type="hidden" name="remove_image" id="remove-image-input" value="0">
+                </div>
+            </div>
+
             <div class="mb-3">
                 <label class="form-label text-white">Description</label>
                 <textarea name="description" class="form-control">{{ old('description') }}</textarea>
@@ -240,4 +248,30 @@
             recalculateTotal();
         }
     </script>
+
+<script>
+function previewImage(event) {
+    let preview = document.getElementById('image-preview');
+    preview.innerHTML = "";
+    if (event.target.files && event.target.files[0]) {
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            let img = document.createElement('img');
+            img.src = e.target.result;
+            img.className = "img-thumbnail mb-2";
+            img.style.maxHeight = "120px";
+            preview.appendChild(img);
+        }
+        reader.readAsDataURL(event.target.files[0]);
+        let removeInput = document.getElementById('remove-image-input');
+        if (removeInput) removeInput.value = "0";
+    }
+}
+function removeCurrentImage() {
+    let preview = document.getElementById('image-preview');
+    preview.innerHTML = '<div class="text-danger mb-2">Image will be removed after update.</div>' +
+        '<input type="hidden" name="remove_image" id="remove-image-input" value="1">';
+}
+</script>
+
 </x-layouts.funeral>

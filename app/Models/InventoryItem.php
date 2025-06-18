@@ -51,6 +51,9 @@ class InventoryItem extends Model
         return $this->belongsTo(\App\Models\User::class, 'funeral_home_id');
     }
 
-
+    public function assetReservations()
+    {
+        return $this->hasMany(AssetReservation::class, 'inventory_item_id');
+    }
 
 }

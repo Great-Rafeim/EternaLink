@@ -11,18 +11,35 @@
             <p class="mt-3 text-muted">No packages created yet.<br>Click the button above to create your first package!</p>
         </div>
     @else
-    <div class="row row-cols-1 row-cols-md-2 g-4">
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
         @foreach($packages as $package)
-            <div class="col">
-                <div class="card h-100 bg-dark text-white border-0 shadow-lg hover-shadow position-relative package-card">
-                    <div class="card-body">
-                        <h4 class="card-title mb-1">{{ $package->name }}</h4>
+            <div class="col d-flex">
+                <div class="card package-card flex-fill h-100 bg-dark text-white border-0 shadow-lg position-relative rounded-4 d-flex flex-column">
+
+                    {{-- Image Area: uniform height, image or placeholder --}}
+                    @if($package->image)
+                        <img src="{{ asset('storage/'.$package->image) }}"
+                             class="card-img-top"
+                             alt="Package Image"
+                             style="height: 180px; object-fit: cover; border-top-left-radius: 1.5rem; border-top-right-radius: 1.5rem;">
+                    @else
+                        <div class="d-flex align-items-center justify-content-center bg-secondary bg-opacity-25"
+                             style="height: 180px; border-top-left-radius: 1.5rem; border-top-right-radius: 1.5rem;">
+                            <div class="text-center w-100">
+                                <i class="bi bi-image" style="font-size: 2.5rem; color: #aab2bd;"></i>
+                                <div class="text-muted small mt-1">No Image</div>
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="card-body d-flex flex-column">
+                        <h4 class="card-title mb-1 fw-bold" style="color: #90caf9;">{{ $package->name }}</h4>
                         <div class="mb-2 text-muted small">{{ $package->created_at->format('M d, Y') }}</div>
-                        <p class="card-text">{{ $package->description ?: 'No description provided.' }}</p>
+                        <p class="card-text flex-grow-1" style="min-height:3.6em;">{{ $package->description ?: 'No description provided.' }}</p>
                     </div>
-                    <div class="card-footer bg-dark border-0 pt-0 d-flex flex-column align-items-center">
-                        <div class="mb-2 fs-5">
-                            <span class="badge bg-gradient text-white p-2"><strong>Total:</strong> ₱{{ number_format($package->total_price, 2) }}</span>
+                    <div class="card-footer bg-dark border-0 pt-0 d-flex flex-column align-items-center rounded-bottom-4">
+                        <div class="mb-2 fs-6">
+                            <span class="badge bg-gradient text-white p-2" style="background:linear-gradient(90deg,#1565c0 60%,#29b6f6 100%)"><strong>Total:</strong> ₱{{ number_format($package->total_price, 2) }}</span>
                         </div>
                         <div class="d-flex gap-2 justify-content-center">
                             <button class="btn btn-outline-light btn-sm" title="View Package" data-bs-toggle="modal" data-bs-target="#viewPackageModal{{ $package->id }}">
@@ -53,12 +70,26 @@
                             </h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
+
+                        @if($package->image)
+                            <img src="{{ asset('storage/'.$package->image) }}"
+                                 alt="Package Image"
+                                 class="img-fluid rounded mb-3"
+                                 style="max-height:180px;object-fit:cover;">
+                        @else
+                            <div class="d-flex align-items-center justify-content-center bg-secondary bg-opacity-25 mb-3"
+                                 style="height: 180px;">
+                                <div class="text-center w-100">
+                                    <i class="bi bi-image" style="font-size: 2.5rem; color: #aab2bd;"></i>
+                                    <div class="text-muted small mt-1">No Image</div>
+                                </div>
+                            </div>
+                        @endif
+
                         <div class="modal-body">
                             <div class="mb-3"><strong>Description:</strong> {{ $package->description ?: 'No description provided.' }}</div>
                             <hr class="border-secondary">
                             @php
-                                // We'll assume you have a relationship: $package->items()->with('categories')->get();
-                                // If you want to group by category for the modal, prepare a grouped array:
                                 $grouped = $package->items->groupBy(fn($item) => $item->category->name ?? 'Uncategorized');
                             @endphp
 
@@ -108,7 +139,6 @@
     @endif
 </div>
 
-<!-- Optional: Add Bootstrap Icons for a more modern look -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
 <script>
@@ -120,9 +150,29 @@ function confirmDelete(event) {
 </script>
 
 <style>
+.package-card {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    border-radius: 2rem;
+}
 .package-card:hover {
     box-shadow: 0 0 24px 0 rgba(70,255,220,0.3), 0 2px 10px 0 rgba(0,0,0,0.16);
     transition: box-shadow .2s;
+}
+.card-body {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+.card-footer {
+    border-bottom-left-radius: 2rem;
+    border-bottom-right-radius: 2rem;
+    background: #16181b;
+}
+.card-img-top, .bg-secondary.bg-opacity-25 {
+    border-top-left-radius: 1.5rem;
+    border-top-right-radius: 1.5rem;
 }
 </style>
 </x-layouts.funeral>

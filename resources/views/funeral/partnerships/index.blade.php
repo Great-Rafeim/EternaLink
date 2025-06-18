@@ -81,7 +81,12 @@
                             <ul class="list-group list-group-flush">
                                 @foreach($sentRequests as $partnership)
                                     <li class="list-group-item bg-dark text-white d-flex justify-content-between align-items-center">
-                                        To: {{ $partnership->partner->name }}
+                                        @if($partnership->partner)
+                                            {{ $partnership->partner->name }}
+                                        @else
+                                            <span class="badge bg-danger">Deleted Funeral Parlor</span>
+                                        @endif
+
                                         <div class="d-flex align-items-center gap-2">
                                             <span class="badge bg-secondary text-capitalize">{{ $partnership->status }}</span>
                                             @if($partnership->status === 'pending')

@@ -13,7 +13,9 @@
                     <tr>
                         <th scope="col">Name</th>
                         <th scope="col">Description</th>
+                        <th scope="col">Type</th>
                         <th scope="col" class="text-center">Actions</th>
+                        
                     </tr>
                 </thead>
                 <tbody>
@@ -21,6 +23,14 @@
                         <tr>
                             <td class="fw-semibold">{{ $category->name }}</td>
                             <td>{{ $category->description ?? '-' }}</td>
+                            <td>
+                                @if($category->is_asset)
+                                    <span class="badge bg-info text-dark">Bookable Asset</span>
+                                @else
+                                    <span class="badge bg-secondary">Consumable</span>
+                                @endif
+                            </td>
+
                             <td class="text-center">
                                 <a href="{{ route('funeral.categories.edit', $category) }}" class="btn btn-sm btn-primary me-1">
                                     <i class="bi bi-pencil"></i> Edit

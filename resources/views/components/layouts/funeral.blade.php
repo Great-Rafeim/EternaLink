@@ -15,15 +15,11 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-
-
-    <!-- Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
 
     <!-- Custom Styles -->
     <style>[x-cloak] { display: none !important; }</style>
-
-
     <style>
         body {
             background: linear-gradient(to bottom right, #1f2937, #111827);
@@ -49,7 +45,55 @@
         footer {
             color: #aaa;
         }
+        .sidebar {
+            min-height: 100vh;
+            background: #1f2937;
+            border-right: 1px solid #222;
+        }
+        .sidebar .nav-link {
+            color: #f8f9fa !important;
+        }
+        .sidebar .nav-link.active,
+        .sidebar .nav-link:hover {
+            background: #21263b;
+            color: #ffc107 !important;
+        }
+        @media (max-width: 991.98px) {
+            .sidebar {
+                min-height: auto;
+            }
+        }
+        /* Hide sidebar on small screens by default */
+        @media (max-width: 991.98px) {
+            .sidebar {
+                position: fixed;
+                top: 56px; /* height of navbar */
+                left: 0;
+                height: 100%;
+                z-index: 1040;
+                transform: translateX(-100%);
+                transition: transform 0.2s;
+                width: 220px;
+                box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            }
+            .sidebar.show-sidebar {
+                transform: translateX(0);
+            }
+            .sidebar-backdrop {
+                display: block;
+                position: fixed;
+                top: 56px;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0,0,0,0.3);
+                z-index: 1039;
+            }
+        }
+
     </style>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
 </head>
 
 <script src="//unpkg.com/alpinejs" defer></script>
@@ -57,7 +101,13 @@
 <body class="d-flex flex-column">
 
 <nav class="navbar navbar-expand-lg shadow-sm">
-    <div class="container">
+    <div class="container-fluid">
+
+        <!-- Sidebar Toggle (Hamburger) -->
+        <button class="btn btn-dark d-lg-none me-2" id="sidebarToggle">
+            <i class="bi bi-list" style="font-size: 1.5rem"></i>
+        </button>
+
         <a class="navbar-brand fw-bold" href="{{ route('funeral.dashboard') }}">
             FuneralParlor
         </a>
@@ -65,54 +115,12 @@
             <span class="navbar-toggler-icon"></span>
         </button>
 
-        <div class="collapse navbar-collapse" id="funeralNavbar">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('funeral.dashboard') ? 'active' : '' }}"
-                        href="{{ route('funeral.dashboard') }}">
-                        <i class="bi bi-house-door me-1"></i> Dashboard
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('funeral.items.*') ? 'active' : '' }}"
-                        href="{{ route('funeral.items.index') }}">
-                        <i class="bi bi-box-seam me-1"></i> Inventory Items
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('funeral.categories.*') ? 'active' : '' }}"
-                        href="{{ route('funeral.categories.index') }}">
-                        <i class="bi bi-tags me-1"></i> Inventory Categories
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('funeral.packages.*') ? 'active' : '' }}"
-                        href="{{ route('funeral.packages.index') }}">
-                        <i class="bi bi-briefcase me-1"></i> Packages
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('funeral.notifications.*') ? 'active' : '' }}"
-                        href="{{ route('funeral.notifications.index') }}">
-                        <i class="bi bi-bell me-1"></i> Notifications
-                    </a>
-                </li>
-
-                <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('funeral.partnerships.*') ? 'active' : '' }}"
-                        href="{{ route('funeral.partnerships.index') }}">
-                        <i class="bi bi-people me-1"></i>
-                        Partnerships
-                    </a>
-                </li>
-
-            </ul>
-            
+        <div class="collapse navbar-collapse justify-content-end" id="funeralNavbar">
             <ul class="navbar-nav ms-auto align-items-center">
+
                 <!-- Notification Bell (summary) -->
-                <li class="nav-item dropdown me-3">
-                    <a class="nav-link position-relative dropdown-toggle" href="#" role="button"
-                        data-bs-toggle="dropdown" aria-expanded="false">
+                <li class="nav-item dropdown">
+                    <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-bell"></i>
                         @if(auth()->user()->unreadNotifications->count())
                             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
@@ -120,23 +128,33 @@
                             </span>
                         @endif
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end shadow p-2" style="width: 300px; max-height: 400px; overflow-y: auto;">
-                        <li class="fw-bold text-secondary px-2">Notifications</li>
-                        @forelse(auth()->user()->unreadNotifications as $notification)
-                            <li class="dropdown-item text-wrap text-dark bg-light rounded mb-1">
-                                {{ $notification->data['message'] ?? 'Notification' }}
-                                <div class="small text-muted">{{ $notification->created_at->diffForHumans() }}</div>
+                    <ul class="dropdown-menu dropdown-menu-end shadow p-2" style="width: 320px; max-height: 400px; overflow-y: auto;">
+                        <li class="fw-bold text-secondary px-2 mb-2">Notifications</li>
+                        @forelse(auth()->user()->unreadNotifications->take(8) as $notification)
+                            <li>
+                                <a href="{{ route('notifications.redirect', $notification->id) }}"
+                                   class="dropdown-item d-flex flex-column small py-2 {{ $notification->read_at ? '' : 'bg-light' }}"
+                                   style="white-space: normal;">
+                                    <span>{!! $notification->data['message'] ?? 'Notification' !!}</span>
+                                    <span class="text-muted">{{ $notification->created_at->diffForHumans() }}</span>
+                                </a>
                             </li>
                         @empty
                             <li class="dropdown-item text-muted">No new notifications</li>
                         @endforelse
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item text-center" href="{{ route('notifications.index') }}">
+                                View All Notifications
+                            </a>
+                        </li>
                     </ul>
                 </li>
 
                 <!-- Profile Dropdown -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button"
-                        data-bs-toggle="dropdown" aria-expanded="false">
+                       data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-person-circle me-2"></i> {{ auth()->user()->name }}
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow">
@@ -156,32 +174,97 @@
                         </li>
                     </ul>
                 </li>
+
             </ul>
         </div>
     </div>
 </nav>
 
+<div class="container-fluid">
+    <div class="row flex-nowrap">
+        <!-- Sidebar -->
+        <div id="sidebar" class="col-auto col-md-3 col-lg-2 px-sm-2 px-0 sidebar d-flex flex-column show-sidebar">
+            <ul class="nav nav-pills flex-column mb-auto py-4">
+                <li class="nav-item mb-2">
+                    <a class="nav-link {{ request()->routeIs('funeral.dashboard') ? 'active' : '' }}"
+                        href="{{ route('funeral.dashboard') }}">
+                        <i class="bi bi-house-door me-2"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link {{ request()->routeIs('funeral.bookings.*') ? 'active' : '' }}"
+                    href="{{ route('funeral.bookings.index') }}">
+                        <i class="bi bi-calendar2-check me-2"></i> Client Bookings
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link {{ request()->routeIs('funeral.items.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.items.index') }}">
+                        <i class="bi bi-box-seam me-2"></i> Inventory Items
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link {{ request()->routeIs('funeral.categories.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.categories.index') }}">
+                        <i class="bi bi-tags me-2"></i> Inventory Categories
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link {{ request()->routeIs('funeral.packages.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.packages.index') }}">
+                        <i class="bi bi-briefcase me-2"></i> Packages
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link {{ request()->routeIs('funeral.partnerships.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.partnerships.index') }}">
+                        <i class="bi bi-people me-2"></i>
+                        Partnerships
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link {{ request()->routeIs('funeral.profile.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.profile.edit') }}">
+                        <i class="bi bi-person me-2"></i>
+                        Funeral Parlor Profile
+                    </a>
+                </li>
 
-<!-- Page Heading -->
-@isset($header)
-<header class="py-4 border-bottom shadow-sm mb-4">
-    <div class="container">
-        <h1 class="h4 text-white">{{ $header }}</h1>
+                <!-- AGENT MANAGEMENT NAV ITEM -->
+                @if(auth()->user()->role === 'funeral')
+                <li class="nav-item mb-2">
+                    <a class="nav-link {{ request()->routeIs('funeral.agents.*') ? 'active' : '' }}"
+                        href="{{ route('funeral.agents.index') }}">
+                        <i class="bi bi-person-badge me-2"></i> Agents
+                    </a>
+                </li>
+                @endif
+
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col py-4">
+            <!-- Page Heading -->
+            @isset($header)
+            <header class="py-4 border-bottom shadow-sm mb-4">
+                <div class="container">
+                    <h1 class="h4 text-white">{{ $header }}</h1>
+                </div>
+            </header>
+            @endisset
+
+            <main class="flex-grow-1">
+                {{ $slot }}
+            </main>
+        </div>
     </div>
-</header>
-@endisset
-
-<!-- Main Content -->
-<main class="flex-grow-1 container py-4">
-    {{ $slot }}
-</main>
+</div>
 
 <!-- Footer -->
 <footer class="py-3 text-center mt-auto border-top">
     &copy; {{ date('Y') }} Funeral Parlor Management. All rights reserved.
 </footer>
-
-
 
 @if (session('success'))
     <div id="toast-success" class="toast align-items-center text-white bg-success border-0 position-fixed top-0 end-0 m-3 show" role="alert">
@@ -291,6 +374,46 @@ $(function(){
         toggleShareableQty();
     });
 </script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('sidebarToggle');
+    let backdrop = null;
+
+    function showSidebar() {
+        sidebar.classList.add('show-sidebar');
+        backdrop = document.createElement('div');
+        backdrop.className = 'sidebar-backdrop d-lg-none';
+        backdrop.onclick = hideSidebar;
+        document.body.appendChild(backdrop);
+    }
+
+    function hideSidebar() {
+        sidebar.classList.remove('show-sidebar');
+        if (backdrop) {
+            document.body.removeChild(backdrop);
+            backdrop = null;
+        }
+    }
+
+    toggleBtn.addEventListener('click', function() {
+        if (sidebar.classList.contains('show-sidebar')) {
+            hideSidebar();
+        } else {
+            showSidebar();
+        }
+    });
+
+    // Close sidebar if window is resized to large
+    window.addEventListener('resize', function() {
+        if (window.innerWidth >= 992) {
+            hideSidebar();
+        }
+    });
+});
+</script>
+ <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.6/dist/signature_pad.umd.min.js"></script>
 
 
 </body>

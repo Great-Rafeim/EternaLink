@@ -42,14 +42,20 @@ class PackageController extends Controller
 
     public function create()
     {
-        // Fetch all categories
-        $categories = InventoryCategory::all();
+        $funeralHomeId = auth()->id();
 
-        // Group items by category id for modal
+        // Fetch only categories owned by this funeral home
+        $categories = InventoryCategory::where('funeral_home_id', $funeralHomeId)->get();
+
+        // Fetch only items owned by this funeral home
+        $items = InventoryItem::where('status', 'available')
+            ->where('funeral_home_id', $funeralHomeId)
+            ->get();
+
         $itemsByCategory = [];
-        $items = InventoryItem::where('status', 'available')->get();
         foreach ($categories as $category) {
-            $itemsByCategory[$category->id] = $items->where('inventory_category_id', $category->id)
+            $itemsByCategory[$category->id] = $items
+                ->where('inventory_category_id', $category->id)
                 ->map(function($item) {
                     return [
                         'id' => $item->id,
@@ -62,13 +68,13 @@ class PackageController extends Controller
         return view('funeral.packages.create', compact('categories', 'itemsByCategory'));
     }
 
-    public function store(Request $request)
+   public function store(Request $request)
     {
-        // Validate package info
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'items' => ['required', 'array'],
+            'image' => ['nullable', 'image', 'max:20480'], // add validation rule for image
         ]);
 
         $items = $request->input('items');
@@ -77,7 +83,6 @@ class PackageController extends Controller
 
         foreach ($items as $catId => $catItems) {
             foreach ($catItems as $itemData) {
-                // Validate existence and get price from DB
                 $item = InventoryItem::findOrFail($itemData['id']);
                 $qty = max(1, intval($itemData['quantity']));
                 $price = $item->selling_price * $qty;
@@ -89,15 +94,21 @@ class PackageController extends Controller
             }
         }
 
-        // Create package and attach items (within transaction)
+        // Prepare the data to save
+        $packageData = [
+            'funeral_home_id' => auth()->id(),
+            'name' => $request->name,
+            'description' => $request->description,
+            'total_price' => $totalPrice,
+        ];
+
+        if ($request->hasFile('image')) {
+            $packageData['image'] = $request->file('image')->store('service_packages', 'public');
+        }
+
         DB::beginTransaction();
         try {
-            $package = ServicePackage::create([
-                'funeral_home_id' => auth()->id(), // adjust as needed
-                'name' => $request->name,
-                'description' => $request->description,
-                'total_price' => $totalPrice,
-            ]);
+            $package = ServicePackage::create($packageData);
 
             foreach ($packageItemsData as $data) {
                 $package->items()->attach($data['inventory_item_id'], ['quantity' => $data['quantity']]);
@@ -113,71 +124,99 @@ class PackageController extends Controller
             ->with('success', 'Package created successfully!');
     }
 
-public function edit($id)
-{
-    $package = ServicePackage::with(['items.category'])->where('funeral_home_id', auth()->id())->findOrFail($id);
+    public function edit($id)
+    {
+        $funeralHomeId = auth()->id();
 
-    // All categories and items (grouped by category)
-    $categories = InventoryCategory::all();
-    $itemsByCategory = [];
-    $items = InventoryItem::where('status', 'available')->get();
-    foreach ($categories as $category) {
-        $itemsByCategory[$category->id] = $items->where('inventory_category_id', $category->id)
-            ->map(fn($item) => [
+        $package = ServicePackage::with(['items.category'])
+            ->where('funeral_home_id', $funeralHomeId)
+            ->findOrFail($id);
+
+        $categories = InventoryCategory::where('funeral_home_id', $funeralHomeId)->get();
+
+        $items = InventoryItem::where('status', 'available')
+            ->where('funeral_home_id', $funeralHomeId)
+            ->get();
+
+        $itemsByCategory = [];
+        foreach ($categories as $category) {
+            $itemsByCategory[$category->id] = $items
+                ->where('inventory_category_id', $category->id)
+                ->map(fn($item) => [
+                    'id' => $item->id,
+                    'name' => $item->name,
+                    'price' => (float)$item->selling_price,
+                ])->values()->toArray();
+        }
+
+        $currentSelection = [];
+        foreach ($package->items as $item) {
+            $catId = $item->category->id ?? null;
+            if (!$catId) continue;
+            $currentSelection[$catId][] = [
                 'id' => $item->id,
                 'name' => $item->name,
                 'price' => (float)$item->selling_price,
-            ])->values()->toArray();
-    }
-
-    // Prepare current selection structure for JS
-    $currentSelection = [];
-    foreach ($package->items as $item) {
-        $catId = $item->category->id ?? null;
-        if (!$catId) continue;
-        $currentSelection[$catId][] = [
-            'id' => $item->id,
-            'name' => $item->name,
-            'price' => (float)$item->selling_price,
-            'quantity' => $item->pivot->quantity ?? 1,
-        ];
-    }
-
-    return view('funeral.packages.edit', compact('package', 'categories', 'itemsByCategory', 'currentSelection'));
-}
-
-public function update(Request $request, $id)
-{
-    $validated = $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'description' => ['nullable', 'string'],
-        'items' => ['required', 'array'],
-    ]);
-
-    $package = ServicePackage::where('funeral_home_id', auth()->id())->findOrFail($id);
-
-    $items = $request->input('items');
-    $totalPrice = 0;
-    $syncData = [];
-
-    foreach ($items as $catId => $catItems) {
-        foreach ($catItems as $itemData) {
-            $item = InventoryItem::findOrFail($itemData['id']);
-            $qty = max(1, intval($itemData['quantity']));
-            $totalPrice += $item->selling_price * $qty;
-            $syncData[$item->id] = ['quantity' => $qty];
+                'quantity' => $item->pivot->quantity ?? 1,
+            ];
         }
+
+        return view('funeral.packages.edit', compact('package', 'categories', 'itemsByCategory', 'currentSelection'));
     }
 
-    $package->update([
-        'name' => $request->name,
-        'description' => $request->description,
-        'total_price' => $totalPrice,
-    ]);
-    $package->items()->sync($syncData);
 
-    return redirect()->route('funeral.packages.index')->with('success', 'Package updated successfully!');
-}
+    public function update(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'items' => ['required', 'array'],
+            'image' => ['nullable', 'image', 'max:20480'], // max ~20MB
+        ]);
+
+        $package = ServicePackage::where('funeral_home_id', auth()->id())->findOrFail($id);
+
+        $items = $request->input('items');
+        $totalPrice = 0;
+        $syncData = [];
+
+        foreach ($items as $catId => $catItems) {
+            foreach ($catItems as $itemData) {
+                $item = InventoryItem::findOrFail($itemData['id']);
+                $qty = max(1, intval($itemData['quantity']));
+                $totalPrice += $item->selling_price * $qty;
+                $syncData[$item->id] = ['quantity' => $qty];
+            }
+        }
+
+        // Build the update data
+        $updateData = [
+            'name' => $request->name,
+            'description' => $request->description,
+            'total_price' => $totalPrice,
+        ];
+
+        // Handle "remove image" (from Remove Image button, sets hidden remove_image field to "1")
+        if ($request->input('remove_image') == "1" && $package->image) {
+            \Storage::disk('public')->delete($package->image);
+            $updateData['image'] = null;
+        }
+
+        // Handle new image upload (replaces old image)
+        if ($request->hasFile('image')) {
+            // Delete old image if any
+            if ($package->image) {
+                \Storage::disk('public')->delete($package->image);
+            }
+            $updateData['image'] = $request->file('image')->store('service_packages', 'public');
+        }
+
+        $package->update($updateData);
+
+        $package->items()->sync($syncData);
+
+        return redirect()->route('funeral.packages.index')->with('success', 'Package updated successfully!');
+    }
 
 public function destroy($id)
 {

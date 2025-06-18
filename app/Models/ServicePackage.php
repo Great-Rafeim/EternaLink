@@ -11,6 +11,7 @@ class ServicePackage extends Model
         'name',
         'description',
         'total_price',
+        'image',
     ];
 
     public function funeralHome()

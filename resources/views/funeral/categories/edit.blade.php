@@ -28,6 +28,20 @@
                                 @error('description') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                             </div>
 
+                            <div class="mb-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="is_asset" id="isAsset"
+                                        value="1" {{ old('is_asset', $category->is_asset ?? false) ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="isAsset">
+                                        Mark as <strong>Bookable Asset</strong> (e.g., vehicle, chapel, freezer)
+                                    </label>
+                                    <div class="form-text text-light">
+                                        Bookable assets are non-consumable and can only be scheduled or reserved, not depleted.
+                                    </div>
+                                </div>
+                            </div>
+
+
                             <div class="d-flex justify-content-end">
                                 <a href="{{ route('funeral.categories.index') }}" class="btn btn-outline-light me-2">
                                     <i class="bi bi-arrow-left"></i> Cancel

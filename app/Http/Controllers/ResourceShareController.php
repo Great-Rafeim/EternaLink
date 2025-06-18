@@ -124,4 +124,6 @@ class ResourceShareController extends Controller
         return redirect()->route('funeral.partnerships.resource_requests.index')
             ->with('success', 'Resource request sent successfully!');
     }
+
+
 }

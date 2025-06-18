@@ -95,5 +95,48 @@ class User extends Authenticatable implements MustVerifyEmail
         return $query->where('role', 'funeral');
     }
 
+public function agents()
+{
+    return $this->belongsToMany(User::class, 'funeral_home_agent', 'funeral_user_id', 'agent_user_id')
+        ->where('role', 'agent');
+}
+
+// Get all funeral users (parlors) linked to this agent
+public function funeralHomes()
+{
+    return $this->belongsToMany(User::class, 'funeral_home_agent', 'agent_user_id', 'funeral_user_id')
+        ->where('role', 'funeral');
+}
+
+// For agents
+public function assignedClients()
+{
+    return $this->belongsToMany(User::class, 'agent_client', 'agent_id', 'client_id')
+        ->withPivot('case')
+        ->withTimestamps();
+}
+
+// For clients
+public function assignedAgents()
+{
+    return $this->belongsToMany(User::class, 'agent_client', 'client_id', 'agent_id')
+        ->withPivot('case')
+        ->withTimestamps();
+}
+public function bookings()
+{
+    return $this->hasMany(\App\Models\Booking::class);
+}
+
+public function funeralParlor()
+{
+    return $this->hasOne(\App\Models\FuneralParlor::class);
+}
+
+public function createdAssetReservations()
+{
+    return $this->hasMany(AssetReservation::class, 'created_by');
+}
+
 
 }

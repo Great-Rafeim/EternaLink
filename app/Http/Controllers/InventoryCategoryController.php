@@ -24,10 +24,15 @@ class InventoryCategoryController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'description' => 'nullable|string',
+            'is_asset' => 'sometimes|boolean',
         ]);
 
-        $category = new InventoryCategory($validated);
-        $category->funeral_home_id = auth()->id();
+        $category = new InventoryCategory([
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'is_asset' => $request->has('is_asset'), // Checkbox: present if checked, absent if not
+            'funeral_home_id' => auth()->id(),
+        ]);
         $category->save();
 
         return redirect()->route('funeral.categories.index')->with('success', 'Category added.');
@@ -50,9 +55,14 @@ class InventoryCategoryController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'description' => 'nullable|string',
+            'is_asset' => 'sometimes|boolean',
         ]);
 
-        $category->update($validated);
+        $category->update([
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'is_asset' => $request->has('is_asset'), // Checkbox: present if checked, absent if not
+        ]);
 
         return redirect()->route('funeral.categories.index')->with('success', 'Category updated.');
     }

@@ -52,6 +52,9 @@ class AuthenticatedSessionController extends Controller
 
     public function redirectToDashboard(): RedirectResponse
     {
+
+     \Log::emergency('THIS IS AN EMERGENCY LOG');
+   
         $user = Auth::user();
 
         switch ($user->role) {

@@ -5,7 +5,7 @@
                 <div class="card bg-dark text-white border-0 shadow-lg rounded-3">
                     <div class="card-body">
                         <h2 class="mb-4">
-                            {{ isset($inventoryItem) ? 'Edit Inventory Item' : 'Add Inventory Item' }}
+                            Add Inventory Item
                         </h2>
 
                         @if(session('success'))
@@ -15,17 +15,15 @@
                             </div>
                         @endif
 
-                        <form method="POST"
-                              action="{{ isset($inventoryItem) ? route('funeral.items.update', $inventoryItem) : route('funeral.items.store') }}">
+                        <form method="POST" action="{{ route('funeral.items.store') }}">
                             @csrf
-                            @if(isset($inventoryItem)) @method('PUT') @endif
 
                             <div class="row g-4">
                                 <!-- Item Name -->
                                 <div class="col-md-6">
                                     <label class="form-label text-white">Item Name</label>
                                     <input type="text" name="name" required
-                                           value="{{ old('name', $inventoryItem->name ?? '') }}"
+                                           value="{{ old('name', '') }}"
                                            class="form-control bg-dark text-white border-secondary">
                                     @error('name') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
@@ -33,10 +31,10 @@
                                 <!-- Category -->
                                 <div class="col-md-6">
                                     <label class="form-label text-white">Category</label>
-                                    <select name="inventory_category_id" class="form-select bg-dark text-white border-secondary">
+                                    <select name="inventory_category_id" id="categorySelect" class="form-select bg-dark text-white border-secondary">
                                         @foreach($categories as $category)
                                             <option value="{{ $category->id }}"
-                                                {{ old('inventory_category_id', $inventoryItem->inventory_category_id ?? '') == $category->id ? 'selected' : '' }}>
+                                                {{ old('inventory_category_id', '') == $category->id ? 'selected' : '' }}>
                                                 {{ $category->name }}
                                             </option>
                                         @endforeach
@@ -48,25 +46,25 @@
                                 <div class="col-md-6">
                                     <label class="form-label text-white">Brand</label>
                                     <input type="text" name="brand"
-                                           value="{{ old('brand', $inventoryItem->brand ?? '') }}"
+                                           value="{{ old('brand', '') }}"
                                            class="form-control bg-dark text-white border-secondary">
                                     @error('brand') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
 
                                 <!-- Quantity -->
-                                <div class="col-md-3">
+                                <div class="col-md-3" id="quantityRow">
                                     <label class="form-label text-white">Quantity</label>
                                     <input type="number" name="quantity" min="0"
-                                           value="{{ old('quantity', $inventoryItem->quantity ?? 0) }}"
+                                           value="{{ old('quantity', 0) }}"
                                            class="form-control bg-dark text-white border-secondary">
                                     @error('quantity') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
 
                                 <!-- Low Stock Threshold -->
-                                <div class="col-md-3">
+                                <div class="col-md-3" id="lowStockRow">
                                     <label class="form-label text-white">Low Stock Threshold</label>
                                     <input type="number" name="low_stock_threshold" min="1"
-                                           value="{{ old('low_stock_threshold', $inventoryItem->low_stock_threshold ?? 5) }}"
+                                           value="{{ old('low_stock_threshold', 5) }}"
                                            class="form-control bg-dark text-white border-secondary">
                                     @error('low_stock_threshold') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
@@ -77,7 +75,7 @@
                                     <select name="status" class="form-select bg-dark text-white border-secondary">
                                         @foreach(['available', 'in_use', 'maintenance'] as $status)
                                             <option value="{{ $status }}"
-                                                {{ old('status', $inventoryItem->status ?? '') == $status ? 'selected' : '' }}>
+                                                {{ old('status', '') == $status ? 'selected' : '' }}>
                                                 {{ ucfirst(str_replace('_', ' ', $status)) }}
                                             </option>
                                         @endforeach
@@ -89,7 +87,7 @@
                                 <div class="col-md-6">
                                     <label class="form-label text-white">Price (optional)</label>
                                     <input type="number" step="0.01" name="price"
-                                           value="{{ old('price', $inventoryItem->price ?? '') }}"
+                                           value="{{ old('price', '') }}"
                                            class="form-control bg-dark text-white border-secondary">
                                     @error('price') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
@@ -97,46 +95,48 @@
                                 <div class="col-md-6">
                                     <label class="form-label text-white">Selling Price</label>
                                     <input type="number" step="0.01" name="selling_price"
-                                        value="{{ old('selling_price', $inventoryItem->selling_price ?? '') }}"
+                                        value="{{ old('selling_price', '') }}"
                                         class="form-control bg-dark text-white border-secondary">
                                     @error('selling_price') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
 
-                                <div class="col-md-6">
+                                <div class="col-md-6" id="expiryRow">
                                     <label class="form-label text-white">Expiry Date (optional)</label>
                                     <input type="date" name="expiry_date"
-                                        value="{{ old('expiry_date', isset($inventoryItem) ? $inventoryItem->expiry_date : '') }}"
+                                        value="{{ old('expiry_date', '') }}"
                                         class="form-control bg-dark text-white border-secondary">
                                     @error('expiry_date') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
 
                                 <div class="row">
                                 <!-- Shareable -->
-                                <div class="col-md-6 d-flex align-items-center">
+                                <div class="col-md-6 d-flex align-items-center" id="shareableRow">
                                     <div class="form-check mt-3">
-                                        <input type="checkbox" name="shareable" value="1" id="shareable"
+                                        <input type="checkbox" name="shareable" value="1" id="shareableSwitch"
                                             class="form-check-input"
-                                            {{ old('shareable', $inventoryItem->shareable ?? false) ? 'checked' : '' }}>
-                                        <label class="form-check-label text-white" for="shareable">
+                                            {{ old('shareable', false) ? 'checked' : '' }}>
+                                        <label class="form-check-label text-white" for="shareableSwitch">
                                             Mark as shareable
                                         </label>
                                     </div>
                                 </div>
 
                                 <!-- Shareable Quantity (hidden by default) -->
-                                <div class="col-md-6" id="shareableQtyGroup" style="display:none;">
+                                <div class="col-md-6" id="shareableQtyRow"
+                                    style="{{ old('shareable', false) ? '' : 'display:none;' }}">
                                     <label for="shareable_quantity" class="form-label text-white">Shareable Quantity</label>
                                     <input type="number" min="1" class="form-control"
                                         id="shareable_quantity" name="shareable_quantity"
-                                        value="{{ old('shareable_quantity', $inventoryItem->shareable_quantity ?? '') }}">
+                                        value="{{ old('shareable_quantity', '') }}">
                                     <div class="form-text text-light">How many units from your stock can be shared with partners?</div>
+                                </div>
                                 </div>
                             </div>
 
                             <!-- Submit -->
                             <div class="mt-4 text-end">
                                 <button type="submit" class="btn btn-primary px-4">
-                                    {{ isset($inventoryItem) ? 'Update Item' : 'Add Item' }}
+                                    Add Item
                                 </button>
                             </div>
                         </form>
@@ -145,4 +145,65 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // Pass the map of category id => is_asset
+        window.categoryAssetMap = @json($categories->pluck('is_asset', 'id'));
+
+        function toggleFieldsForCategory() {
+            var select = document.getElementById('categorySelect');
+            var selectedCategoryId = select.value;
+            var isAsset = window.categoryAssetMap[selectedCategoryId] == 1;
+
+            // Toggle fields
+            document.getElementById('quantityRow').style.display = isAsset ? 'none' : '';
+            document.getElementById('lowStockRow').style.display = isAsset ? 'none' : '';
+            document.getElementById('expiryRow').style.display = isAsset ? 'none' : '';
+            document.getElementById('shareableRow').style.display = isAsset ? 'none' : '';
+            document.getElementById('shareableQtyRow').style.display = isAsset ? 'none' : '';
+
+            // Reset values if asset
+            if (isAsset) {
+                if(document.querySelector('input[name="quantity"]')) {
+                    document.querySelector('input[name="quantity"]').value = 1;
+                }
+                if(document.querySelector('input[name="low_stock_threshold"]')) {
+                    document.querySelector('input[name="low_stock_threshold"]').value = '';
+                }
+                if(document.querySelector('input[name="expiry_date"]')) {
+                    document.querySelector('input[name="expiry_date"]').value = '';
+                }
+                if(document.querySelector('input[name="shareable"]')) {
+                    document.querySelector('input[name="shareable"]').checked = false;
+                }
+                if(document.querySelector('input[name="shareable_quantity"]')) {
+                    document.querySelector('input[name="shareable_quantity"]').value = '';
+                }
+            }
+        }
+
+        // Show/hide shareable quantity row for non-asset consumables
+        function toggleShareableQty() {
+            var shareableCheckbox = document.getElementById('shareableSwitch');
+            var qtyGroup = document.getElementById('shareableQtyRow');
+            qtyGroup.style.display =
+                shareableCheckbox && shareableCheckbox.checked && document.getElementById('shareableRow').style.display !== 'none'
+                ? ''
+                : 'none';
+        }
+
+        document.getElementById('categorySelect').addEventListener('change', function() {
+            toggleFieldsForCategory();
+            toggleShareableQty();
+        });
+
+        if(document.getElementById('shareableSwitch')) {
+            document.getElementById('shareableSwitch').addEventListener('change', toggleShareableQty);
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            toggleFieldsForCategory();
+            toggleShareableQty();
+        });
+    </script>
 </x-layouts.funeral>

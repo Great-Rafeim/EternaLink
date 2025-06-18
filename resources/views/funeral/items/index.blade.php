@@ -2,14 +2,20 @@
     <div class="container py-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 class="text-white">Inventory Items</h2>
-            <div>
-                <a href="{{ route('funeral.items.export', request()->all()) }}" class="btn btn-outline-secondary me-2 mb-2">
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{{ route('funeral.items.export', request()->all()) }}" class="btn btn-outline-secondary">
                     <i class="bi bi-download"></i> Export CSV
                 </a>
-                <a href="{{ route('funeral.items.create') }}" class="btn btn-success mb-2">+ Add Item</a>
-                <a href="{{ route('funeral.partnerships.resource_requests.index') }}" class="btn btn-warning mb-2">
+                <a href="{{ route('funeral.items.create') }}" class="btn btn-success">
+                    + Add Item
+                </a>
+                <a href="{{ route('funeral.partnerships.resource_requests.index') }}" class="btn btn-warning">
                     <i class="bi bi-box-arrow-in-right me-1"></i>
                     View Resource Requests
+                </a>
+                <a href="{{ route('funeral.assets.reservations.index') }}" class="btn btn-info">
+                    <i class="bi bi-calendar-event me-1"></i>
+                    Asset Booking Management
                 </a>
             </div>
         </div>

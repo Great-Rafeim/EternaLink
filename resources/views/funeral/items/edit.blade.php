@@ -22,7 +22,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Category</label>
-                                <select name="inventory_category_id" class="form-select bg-secondary border-0 text-white">
+                                <select name="inventory_category_id" id="categorySelect" class="form-select bg-secondary border-0 text-white">
                                     @foreach($categories as $category)
                                         <option value="{{ $category->id }}"
                                             {{ old('inventory_category_id', $item->inventory_category_id ?? '') == $category->id ? 'selected' : '' }}>
@@ -41,7 +41,7 @@
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-6 mb-3" id="quantityRow">
                                     <label class="form-label">Quantity</label>
                                     <input type="number" name="quantity" min="0" value="{{ old('quantity', $item->quantity ?? 0) }}"
                                            class="form-control bg-secondary border-0 text-white">
@@ -61,7 +61,7 @@
                                 </div>
                             </div>
 
-                            <div class="mb-3">
+                            <div class="mb-3" id="lowStockRow">
                                 <label class="form-label">Low Stock Threshold</label>
                                 <input type="number" name="low_stock_threshold" min="1" value="{{ old('low_stock_threshold', $item->low_stock_threshold ?? 5) }}"
                                     class="form-control bg-secondary border-0 text-white">
@@ -83,7 +83,7 @@
                                         class="form-control bg-dark text-white border-secondary">
                                     @error('selling_price') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-6 mb-3" id="expiryRow">
                                     <label class="form-label text-white">Expiry Date (optional)</label>
                                     <input type="date" name="expiry_date"
                                         value="{{ old('expiry_date', $item->expiry_date ?? '') }}"
@@ -94,7 +94,7 @@
 
                             <div class="row align-items-center mb-3">
                                 <!-- Shareable Toggle -->
-                                <div class="col-md-6">
+                                <div class="col-md-6" id="shareableRow">
                                     <div class="form-check form-switch">
                                         <input class="form-check-input bg-secondary border-0" type="checkbox" name="shareable" value="1"
                                             id="shareableSwitch"
@@ -104,7 +104,7 @@
                                 </div>
 
                                 <!-- Shareable Quantity (show if checked or previously marked as shareable) -->
-                                <div class="col-md-6" id="shareableQtyGroup"
+                                <div class="col-md-6" id="shareableQtyRow"
                                     style="{{ old('shareable', $item->shareable ?? false) ? '' : 'display:none;' }}">
                                     <label for="shareable_quantity" class="form-label text-white">Shareable Quantity</label>
                                     <input type="number" min="1" class="form-control"
@@ -113,7 +113,6 @@
                                     <div class="form-text text-light">How many units from your stock can be shared with partners?</div>
                                 </div>
                             </div>
-
 
                             <div class="d-flex justify-content-end">
                                 <a href="{{ route('funeral.items.index') }}" class="btn btn-outline-light me-2">Cancel</a>
@@ -129,17 +128,65 @@
         </div>
     </div>
 
-<script>
-    function toggleShareableQty() {
-        var shareableCheckbox = document.getElementById('shareableSwitch');
-        var qtyGroup = document.getElementById('shareableQtyGroup');
-        qtyGroup.style.display = shareableCheckbox.checked ? 'block' : 'none';
-    }
+    <script>
+        // Pass the map of category id => is_asset
+        window.categoryAssetMap = @json($categories->pluck('is_asset', 'id'));
 
-    document.getElementById('shareableSwitch').addEventListener('change', toggleShareableQty);
-    window.addEventListener('DOMContentLoaded', function() {
-        toggleShareableQty(); // This will respect the initial state!
-    });
-</script>
+        function toggleFieldsForCategory() {
+            var select = document.getElementById('categorySelect');
+            var selectedCategoryId = select.value;
+            var isAsset = window.categoryAssetMap[selectedCategoryId] == 1;
 
+            // Toggle fields
+            document.getElementById('quantityRow').style.display = isAsset ? 'none' : '';
+            document.getElementById('lowStockRow').style.display = isAsset ? 'none' : '';
+            document.getElementById('expiryRow').style.display = isAsset ? 'none' : '';
+            document.getElementById('shareableRow').style.display = isAsset ? 'none' : '';
+            document.getElementById('shareableQtyRow').style.display = isAsset ? 'none' : '';
+
+            // Reset values if asset
+            if (isAsset) {
+                if(document.querySelector('input[name="quantity"]')) {
+                    document.querySelector('input[name="quantity"]').value = 1;
+                }
+                if(document.querySelector('input[name="low_stock_threshold"]')) {
+                    document.querySelector('input[name="low_stock_threshold"]').value = '';
+                }
+                if(document.querySelector('input[name="expiry_date"]')) {
+                    document.querySelector('input[name="expiry_date"]').value = '';
+                }
+                if(document.querySelector('input[name="shareable"]')) {
+                    document.querySelector('input[name="shareable"]').checked = false;
+                }
+                if(document.querySelector('input[name="shareable_quantity"]')) {
+                    document.querySelector('input[name="shareable_quantity"]').value = '';
+                }
+            }
+        }
+
+        // Show/hide shareable quantity row for non-asset consumables
+        function toggleShareableQty() {
+            var shareableCheckbox = document.getElementById('shareableSwitch');
+            var qtyGroup = document.getElementById('shareableQtyRow');
+            // Only show if checkbox is checked AND the shareable row is not hidden
+            qtyGroup.style.display =
+                shareableCheckbox && shareableCheckbox.checked && document.getElementById('shareableRow').style.display !== 'none'
+                ? ''
+                : 'none';
+        }
+
+        document.getElementById('categorySelect').addEventListener('change', function() {
+            toggleFieldsForCategory();
+            toggleShareableQty();
+        });
+
+        if(document.getElementById('shareableSwitch')) {
+            document.getElementById('shareableSwitch').addEventListener('change', toggleShareableQty);
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            toggleFieldsForCategory();
+            toggleShareableQty();
+        });
+    </script>
 </x-layouts.funeral>
