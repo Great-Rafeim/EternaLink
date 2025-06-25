@@ -32,6 +32,8 @@ use \App\Http\Controllers\BookingPackageCustomizationController;
 use \App\Http\Controllers\AssetReservationControllerl;
 use App\Http\Controllers\AssetReservationController;
 use App\Http\Controllers\ResourceShareController;
+use App\Http\Controllers\AgentDashboardController;
+use App\Http\Controllers\ManageServiceController;
 
 
 Route::get('/', function () {
@@ -112,6 +114,7 @@ Route::middleware(['auth', '2fa'])->group(function () {
             'client' => redirect()->route('client.dashboard'),
             'funeral' => redirect()->route('funeral.dashboard'),
             'cemetery' => redirect()->route('cemetery.dashboard'),
+            'agent' => redirect()->route('agent.dashboard'),
             default => abort(403),
         };
     })->name('dashboard');
@@ -132,7 +135,9 @@ Route::middleware(['auth', '2fa', 'verified', 'role:funeral'])->group(function (
 Route::middleware(['auth', '2fa', 'verified', 'role:cemetery'])->group(function () {
     Route::get('/cemetery/dashboard', [CemeteryDashboardController::class, 'index'])->name('cemetery.dashboard');
 });
-
+Route::middleware(['auth', '2fa', 'verified', 'role:agent'])->group(function () {
+    Route::get('/agent/dashboard', [AgentDashboardController::class, 'index'])->name('agent.dashboard');
+});
 
 // Profile routes (restricted to admin users)
 Route::middleware(['auth', '2fa', 'verified'])->group(function () {
@@ -216,11 +221,10 @@ Route::prefix('funeral')
 
         // Resource Sharing
         Route::get('/funeral/resource-requests/request/{id}', [ResourceShareController::class, 'showShareableItems'])->name('partnerships.resource_requests.request');
-        Route::get('resource-requests/request', [ResourceShareController::class, 'showShareableItems'])->name('partnerships.resource_requests.request');
         Route::post('/funeral/resource-requests/send-request/{item}/{shareable}', [ResourceShareController::class, 'sendRequest'])->name('partnerships.resource_requests.sendRequest');
         Route::get('/funeral/resource-requests/request/{requested}/{provider}', [ResourceShareController::class, 'createRequestForm'])->name('partnerships.resource_requests.createRequestForm');
-        Route::post('/funeral/resource-requestss/request', [ResourceShareController::class, 'storeRequest'])->name('partnerships.resource_requests.storeRequest');
-        Route::get('/funeral/partnerships/resource-requests/request', [ResourceShareController::class, 'searchPage'])->name('partnerships.resource_requests.browse');
+        Route::post('/funeral/resource-requests/request', [ResourceShareController::class, 'storeRequest'])->name('partnerships.resource_requests.storeRequest');
+        Route::get('/funeral/partnerships/resource-requests/request', [ResourceShareController::class, 'showAllShareableItems'])->name('partnerships.resource_requests.browse');
 
         Route::get('/funeral/resource-requests', [ResourceRequestController::class, 'index'])->name('partnerships.resource_requests.index');
 
@@ -247,9 +251,28 @@ Route::prefix('funeral')
         Route::get('/bookings/{booking}/review-details', [FuneralDashboardController::class, 'reviewDetails'])->name('bookings.review.details');
         Route::patch('/bookings/{booking}/other-fees', [FuneralDashboardController::class, 'updateOtherFees'])->name('bookings.updateOtherFees');
         Route::patch('/bookings/{booking}/update-payment-remarks', [FuneralDashboardController::class, 'updatePaymentRemarks'])->name('bookings.updatePaymentRemarks');
+        Route::patch('/bookings/{booking}/start-service', [FuneralDashboardController::class, 'startService'])->name('bookings.startService');
+        Route::get('/bookings/{booking}/manage-service', [FuneralDashboardController::class, 'manageService'])->name('bookings.manageService');
 
+        // Manage Service
+        Route::get('/bookings/{booking}/manage-service', [ManageServiceController::class, 'index'])->name('bookings.manage-service');
+        Route::post('/bookings/{booking}/manage-service/post-update', [ManageServiceController::class, 'postUpdate'])->name('bookings.manage-service.post-update');
+        Route::patch('/bookings/{booking}/manage-service/end', [ManageServiceController::class, 'endService'])->name('bookings.manage-service.end');
+        Route::post('/bookings/{booking}/assign-assets', [ManageServiceController::class, 'assignAssets'])->name('bookings.assign-assets');
+        
         Route::get('/', [AssetReservationController::class, 'index'])->name('assets.reservations.index');
         Route::patch('/{reservation}/status', [AssetReservationController::class, 'updateStatus'])->name('assets.reservations.updateStatus');
+        Route::patch('/assets/reservations/{reservation}/cancel', [AssetReservationController::class, 'cancel'])->name('assets.reservations.cancel');
+        Route::patch('/assets/reservations/{reservation}/return', [AssetReservationController::class, 'returnAsset'])->name('assets.reservations.return');
+        Route::patch('/assets/reservations/{reservation}/receive', [AssetReservationController::class, 'receive'])->name('assets.reservations.receive');
+        Route::patch('/assets/reservations/{reservation}/update-status', [AssetReservationController::class, 'updateStatus'])->name('assets.reservations.updateStatus');
+
+        // Edit Info-of-the-Dead form (GET)
+        Route::get('/bookings/{booking}/edit-info', [FuneralDashboardController::class, 'editInfo'])->name('bookings.editInfo');
+
+        // Update Info-of-the-Dead form (POST/PATCH)
+        Route::patch('/bookings/{booking}/update-info', [FuneralDashboardController::class, 'updateInfo'])->name('bookings.updateInfo');
+
 
 
 
@@ -280,6 +303,11 @@ Route::middleware(['auth', 'role:funeral'])->prefix('funeral')->group(function (
     Route::get('/agents/{agent}/edit', [AgentController::class, 'edit'])->name('funeral.agents.edit');
     Route::post('/agents/{agent}/edit', [AgentController::class, 'update'])->name('funeral.agents.update');
     Route::delete('/agents/{agent}', [AgentController::class, 'destroy'])->name('funeral.agents.destroy');
+    Route::post('/bookings/{booking}/agent-invite', [AgentController::class, 'inviteClientAgent'])->name('funeral.bookings.agent-invite');
+    Route::post('/bookings/{booking}/assign-agent', [AgentController::class, 'assignFuneralAgent'])->name('funeral.bookings.assign-agent');
+
+
+    
 
 
     

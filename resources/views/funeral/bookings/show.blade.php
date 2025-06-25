@@ -1,17 +1,6 @@
 <x-layouts.funeral>
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <a href="{{ route('funeral.bookings.index') }}" class="btn btn-link mb-3">
-                    <i class="bi bi-arrow-left"></i> Back to Dashboard
-                </a>
-                <div class="card shadow-lg border-0 rounded-4 p-4">
-                    <div class="card-body">
-                        <a href="{{ route('client.bookings.details.exportPdf', $booking->id) }}"
-                           class="btn btn-outline-primary mb-3 float-end" target="_blank">
-                            <i class="bi bi-filetype-pdf"></i> Export as PDF
-                        </a>
- @php
+
+@php
     $details = $booking->detail;
     $statuses = [
         'pending'          => ['label' => 'Pending',            'color' => 'warning',   'icon' => 'hourglass-split'],
@@ -56,184 +45,303 @@
     $showApproveDeny = in_array($booking->status, ['pending', 'for_review']);
 @endphp
 
-                        {{-- STATUS --}}
-                        <div class="mb-4 d-flex align-items-center gap-3">
-                            <span class="badge bg-{{ $status['color'] }}-subtle text-{{ $status['color'] }} px-3 py-2 fs-6">
-                                <i class="bi bi-{{ $status['icon'] }}"></i> {{ $status['label'] }}
-                            </span>
-                            <span class="text-muted small">Booking #{{ $booking->id }}</span>
-                        </div>
-
-{{-- BUTTONS --}}
-
-{{-- 1st set: Accept/Reject (if status is "confirmed") --}}
-@if($booking->status === 'pending')
-    <form action="{{ route('funeral.bookings.accept', $booking->id) }}" method="POST" class="d-inline-block">
-        @csrf
-        @method('PATCH')
-        <button type="submit" class="btn btn-success rounded-pill px-4 mb-2">
-            <i class="bi bi-check2-circle"></i> Accept
-        </button>
-    </form>
-    <form action="{{ route('funeral.bookings.reject', $booking->id) }}" method="POST" class="d-inline-block ms-1">
-        @csrf
-        @method('PATCH')
-        <button type="submit" class="btn btn-danger rounded-pill px-4 mb-2">
-            <i class="bi bi-x-circle"></i> Reject
-        </button>
-    </form>
-@endif
-
-{{-- 2nd set: Approve/Deny (if status is "for_review") --}}
-@if($booking->status === 'for_review')
-    <button class="btn btn-success rounded-pill px-4 mb-2" data-bs-toggle="modal" data-bs-target="#approveModal">
-        <i class="bi bi-check2-circle"></i> Approve
-    </button>
-    <form action="{{ route('funeral.bookings.deny', $booking->id) }}" method="POST" class="d-inline-block ms-1">
-        @csrf
-        @method('PATCH')
-        <button type="submit" class="btn btn-danger rounded-pill px-4 mb-2">
-            <i class="bi bi-x-circle"></i> Deny
-        </button>
-    </form>
-@endif
-
-
-
-                        <!-- Approve Modal (Bootstrap 5) -->
-                        <div class="modal fade" id="approveModal" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
-                          <div class="modal-dialog modal-lg">
-                            <form method="POST" action="{{ route('funeral.bookings.approve', $booking->id) }}" class="modal-content">
-                                @csrf
-                                @method('PATCH')
-                                <div class="modal-header">
-                                    <h5 class="modal-title" id="approveModalLabel"><i class="bi bi-archive"></i> Inventory Impact</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <p class="text-muted">The following items will have their quantities (and shareable quantities, if shareable) deducted upon approval:</p>
-                                    <table class="table table-sm mb-3">
-<thead>
-    <tr>
-        <th>Item</th>
-        <th>Category</th>
-        <th>Brand</th>
-        <th>Deduct</th>
-        <th>Shareable Deduct</th>
-        <th>Available</th>
-        <th>Shareable Left</th>
-        <th>Asset Reservation</th>
-    </tr>
-</thead>
-
-<tbody>
-    @php
-        if($booking->customized_package_id && $booking->customizedPackage) {
-            $modalItems = $booking->customizedPackage->items->map(function($customItem) {
-                return [
-                    'invItem' => $customItem->inventoryItem,
-                    'category' => $customItem->inventoryItem?->category,
-                    'brand' => $customItem->inventoryItem?->brand,
-                    'qty' => $customItem->quantity,
-                    'shareable' => $customItem->inventoryItem?->shareable,
-                    'shareable_quantity' => $customItem->inventoryItem?->shareable_quantity,
-                    'available' => $customItem->inventoryItem?->quantity,
-                    'is_asset' => $customItem->inventoryItem?->category?->is_asset ?? false,
-                ];
-            });
-        } else {
-            $modalItems = $booking->package->items->map(function($item) {
-                return [
-                    'invItem' => $item,
-                    'category' => $item->category,
-                    'brand' => $item->brand,
-                    'qty' => $item->pivot->quantity ?? 1,
-                    'shareable' => $item->shareable,
-                    'shareable_quantity' => $item->shareable_quantity,
-                    'available' => $item->quantity,
-                    'is_asset' => $item->category?->is_asset ?? false,
-                ];
-            });
-        }
-
-        // Reservation period logic (replace with your business logic)
-        // Here, let's assume reservation is from wake_start_date to interment_cremation_date
-        $details = $booking->detail;
-        $reservationStart = $details?->wake_start_date ? \Carbon\Carbon::parse($details->wake_start_date)->format('M d, Y') : null;
-        $reservationEnd = $details?->interment_cremation_date ? \Carbon\Carbon::parse($details->interment_cremation_date)->format('M d, Y') : null;
-    @endphp
-
-    @foreach($modalItems as $row)
-        <tr>
-            <td>{{ $row['invItem']?->name ?? '-' }}</td>
-            <td>{{ $row['category']?->name ?? '-' }}</td>
-            <td>{{ $row['brand'] ?? '-' }}</td>
-            <td class="text-danger">
-                @if($row['is_asset'])
-                    <span class="text-muted">-</span>
-                @else
-                    -{{ $row['qty'] }}
-                @endif
-            </td>
-            <td class="text-danger">
-                @if(!$row['is_asset'] && $row['shareable'] && ($row['shareable_quantity'] ?? 0) > 0)
-                    -{{ min($row['qty'], $row['shareable_quantity'] ?? 0) }}
-                @else
-                    <span class="text-muted">-</span>
-                @endif
-            </td>
-            <td>
-                @if($row['is_asset'])
-                    <span class="text-muted">-</span>
-                @else
-                    {{ $row['available'] }}
-                @endif
-            </td>
-            <td>
-                @if($row['is_asset'])
-                    <span class="text-muted">-</span>
-                @elseif($row['shareable'])
-                    {{ $row['shareable_quantity'] ?? 0 }}
-                @else
-                    <span class="text-muted">-</span>
-                @endif
-            </td>
-            {{-- Asset Reservation --}}
-            <td>
-                @if($row['is_asset'])
-                    @if($reservationStart && $reservationEnd)
-                        <span class="text-primary fw-semibold">
-                            {{ $reservationStart }} - {{ $reservationEnd }}
-                        </span>
-                    @else
-                        <span class="text-warning">No reservation date set</span>
-                    @endif
-                @else
-                    <span class="text-muted">-</span>
-                @endif
-            </td>to
-        </tr>
-    @endforeach
-</tbody>
-
-                                    </table>
-<div class="alert alert-info small mt-2">
-    <b>Note:</b><br>
-    - <b>Asset items</b> will NOT have quantity deducted but will be reserved for the duration shown.<br>
-    - <b>Shareable items</b> deduct from both main and shareable stocks.<br>
-    - If not enough stock or if reservation conflicts, approval will fail.
+                        <div class="container py-5">
+                            <div class="row justify-content-center">
+                                <div class="col-lg-8">
+                                    <a href="{{ route('funeral.bookings.index') }}" class="btn btn-link mb-3">
+                                        <i class="bi bi-arrow-left"></i> Back to Dashboard
+                                    </a>
+                                    <div class="card shadow-lg border-0 rounded-4 p-4">
+                                        <div class="card-body">
+<div class="mb-3 row align-items-center" style="min-height:42px;">
+    {{-- Left-aligned: Manage Service --}}
+    <div class="col">
+        @if($booking->status === \App\Models\Booking::STATUS_ONGOING)
+            <a href="{{ route('funeral.bookings.manage-service', $booking->id) }}"
+               class="btn btn-primary">
+                <i class="bi bi-gear"></i> Manage Service
+            </a>
+        @endif
+    </div>
+    {{-- Right-aligned: Export PDF and Edit --}}
+    <div class="col-auto d-flex gap-2 justify-content-end">
+        <a href="{{ route('client.bookings.details.exportPdf', $booking->id) }}"
+           class="btn btn-outline-primary"
+           target="_blank">
+            <i class="bi bi-filetype-pdf"></i> Export as PDF
+        </a>
+        @if(!in_array($booking->status, ['confirmed', 'for_initial_review', 'in_progress']))
+            <a href="{{ route('funeral.bookings.editInfo', $booking->id) }}"
+               class="btn btn-outline-warning">
+                <i class="bi bi-pencil"></i>
+                Edit Form(as Funeral Parlor)
+            </a>
+        @endif
+    </div>
 </div>
 
+                                                {{-- STATUS --}}
+                                                <div class="mb-4 d-flex align-items-center gap-3">
+                                                    <span class="badge bg-{{ $status['color'] }}-subtle text-{{ $status['color'] }} px-3 py-2 fs-6">
+                                                        <i class="bi bi-{{ $status['icon'] }}"></i> {{ $status['label'] }}
+                                                    </span>
+                                                    <span class="text-muted small">Booking #{{ $booking->id }}</span>
+                                                </div>
+
+                                                {{-- BUTTONS --}}
+
+                                                {{-- 1st set: Accept/Reject (if status is "confirmed") --}}
+                                                @if($booking->status === 'pending')
+                                                    <form action="{{ route('funeral.bookings.accept', $booking->id) }}" method="POST" class="d-inline-block">
+                                                        @csrf
+                                                        @method('PATCH')
+                                                        <button type="submit" class="btn btn-success rounded-pill px-4 mb-2">
+                                                            <i class="bi bi-check2-circle"></i> Accept
+                                                        </button>
+                                                    </form>
+                                                    <form action="{{ route('funeral.bookings.reject', $booking->id) }}" method="POST" class="d-inline-block ms-1">
+                                                        @csrf
+                                                        @method('PATCH')
+                                                        <button type="submit" class="btn btn-danger rounded-pill px-4 mb-2">
+                                                            <i class="bi bi-x-circle"></i> Reject
+                                                        </button>
+                                                    </form>
+                                                @endif
+
+                                                {{-- 2nd set: Approve/Deny (if status is "for_review") --}}
+                                                @if($booking->status === 'for_review')
+                                                    <button class="btn btn-success rounded-pill px-4 mb-2" data-bs-toggle="modal" data-bs-target="#approveModal">
+                                                        <i class="bi bi-check2-circle"></i> Approve
+                                                    </button>
+                                                    <form action="{{ route('funeral.bookings.deny', $booking->id) }}" method="POST" class="d-inline-block ms-1">
+                                                        @csrf
+                                                        @method('PATCH')
+                                                        <button type="submit" class="btn btn-danger rounded-pill px-4 mb-2">
+                                                            <i class="bi bi-x-circle"></i> Deny
+                                                        </button>
+                                                    </form>
+                                                @endif
+
+                                                {{-- 3rd set: Service Start (if status is "approved") --}}
+                                                @if($booking->status === \App\Models\Booking::STATUS_APPROVED)
+                                                    <form action="{{ route('funeral.bookings.startService', $booking->id) }}" method="POST" class="d-inline-block">
+                                                        @csrf
+                                                        @method('PATCH')
+                                                        <button type="submit" class="btn btn-primary rounded-pill px-4 mb-2">
+                                                            <i class="bi bi-play-circle"></i> Service Start
+                                                        </button>
+                                                    </form>
+                                                @endif
+
+
+
+                            <!-- Approve Modal (Bootstrap 5) -->
+                            <div class="modal fade" id="approveModal" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
+                            <div class="modal-dialog modal-lg modal-dialog-centered">
+                                <form method="POST" action="{{ route('funeral.bookings.approve', $booking->id) }}" class="modal-content border-0 shadow">
+                                @csrf
+                                @method('PATCH')
+                                <div class="modal-header bg-primary text-white border-0 rounded-top">
+                                    <h5 class="modal-title" id="approveModalLabel">
+                                    <i class="bi bi-boxes me-2"></i>
+                                    Inventory Impact
+                                    </h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                    <button type="submit" class="btn btn-success">
-                                        <i class="bi bi-check2-circle"></i> Confirm Approve & Deduct
+                                <div class="modal-body pb-0">
+                                    <p class="text-muted mb-3">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <span>The following consumable items will have their stocks updated upon approval:</span>
+                                    </p>
+                                    <div class="table-responsive rounded-3 shadow-sm mb-2">
+                                    <table class="table table-bordered table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                        <tr>
+                                            <th>Item</th>
+                                            <th>Category</th>
+                                            <th>Brand</th>
+                                            <th class="text-center">To Deduct</th>
+                                            <th class="text-center">Available Quantity</th>
+                                            <th class="text-center">Quantity Left<br><span class="fw-normal small">(after approval)</span></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        @php
+                                            $components = [];
+                                            if ($booking->customized_package_id && $booking->customizedPackage) {
+                                                foreach ($booking->customizedPackage->items as $item) {
+                                                    $invItem = $item->inventoryItem;
+                                                    if (!$invItem) continue;
+                                                    $category = $invItem->category;
+                                                    if ($category && !$category->is_asset) {
+                                                        $qty = $item->quantity;
+                                                        $available = $invItem->quantity;
+                                                        $left = $available - $qty;
+                                                        $components[] = [
+                                                            'name' => $invItem->name,
+                                                            'category' => $category->name ?? '-',
+                                                            'brand' => $invItem->brand ?? '-',
+                                                            'qty' => $qty,
+                                                            'available' => $available,
+                                                            'left' => $left,
+                                                            'low_stock_threshold' => $invItem->low_stock_threshold,
+                                                        ];
+                                                    }
+                                                }
+                                            } else {
+                                                $servicePackage = $booking->package;
+                                                if ($servicePackage && $servicePackage->components) {
+                                                    foreach ($servicePackage->components as $component) {
+                                                        $invItem = $component->inventoryItem;
+                                                        $category = $component->inventoryCategory ?? $invItem?->category;
+                                                        if ($invItem && $category && !$category->is_asset) {
+                                                            $qty = $component->quantity;
+                                                            $available = $invItem->quantity;
+                                                            $left = $available - $qty;
+                                                            $components[] = [
+                                                                'name' => $invItem->name,
+                                                                'category' => $category->name ?? '-',
+                                                                'brand' => $invItem->brand ?? '-',
+                                                                'qty' => $qty,
+                                                                'available' => $available,
+                                                                'left' => $left,
+                                                                'low_stock_threshold' => $invItem->low_stock_threshold,
+                                                            ];
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        @endphp
+
+                                        @forelse($components as $row)
+                                            <tr>
+                                            <td class="fw-semibold">{{ $row['name'] }}</td>
+                                            <td>{{ $row['category'] }}</td>
+                                            <td>{{ $row['brand'] }}</td>
+                                            <td class="text-danger text-center">-{{ $row['qty'] }}</td>
+                                            <td class="text-center">{{ $row['available'] }}</td>
+                                            <td class="text-center {{ ($row['low_stock_threshold'] && $row['left'] <= $row['low_stock_threshold']) ? 'text-warning fw-bold' : '' }}">
+                                                {{ $row['left'] }}
+                                                @if($row['low_stock_threshold'] && $row['left'] <= $row['low_stock_threshold'])
+                                                <span class="badge bg-warning text-dark ms-1">Low</span>
+                                                @endif
+                                            </td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                            <td colspan="6" class="text-center text-muted">No consumable items to deduct for this booking.</td>
+                                            </tr>
+                                        @endforelse
+                                        </tbody>
+                                    </table>
+
+                            @php
+                                // Use your logic to extract assets and asset categories
+                                // Filter assets (is_asset == true)
+                                $assets = collect($packageItems)->filter(fn($pkg) => $pkg['is_asset'] ?? false);
+                                // Collect asset category IDs already listed
+                                $assetCategoryIdsInItems = $assets->pluck('category_id')->unique()->toArray();
+
+                                // Gather all asset categories from $assetCategories (should be passed from controller or view composer if not present)
+                                $allAssetCategories = $assetCategories ?? [];
+
+                                // Booking schedule
+                                $details = $booking->detail;
+                                $scheduleStart = $details?->wake_start_date ? \Carbon\Carbon::parse($details->wake_start_date)->format('M d, Y') : null;
+                                $scheduleEnd = $details?->interment_cremation_date
+                                    ? \Carbon\Carbon::parse($details->interment_cremation_date)->format('M d, Y')
+                                    : ($details?->wake_end_date ? \Carbon\Carbon::parse($details->wake_end_date)->format('M d, Y') : null);
+                                $scheduleRange = $scheduleStart && $scheduleEnd
+                                    ? $scheduleStart . ' – ' . $scheduleEnd
+                                    : ($scheduleStart ?: '—');
+                            @endphp
+
+                            @if($assets->count() || (isset($allAssetCategories) && count($allAssetCategories)))
+                                <div class="mt-4">
+                                    <h6 class="text-secondary mb-2">
+                                        <i class="bi bi-truck-front me-1"></i>
+                                        Bookable Assets Included in Package
+                                    </h6>
+                                    <div class="table-responsive rounded-3 shadow-sm">
+                                        <table class="table table-bordered table-hover align-middle mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Asset/Item</th>
+                                                    <th>Category</th>
+                                                    <th class="text-center">Scheduled Use</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {{-- Assigned/selected assets --}}
+                                                @forelse($assets as $pkg)
+                                                    <tr>
+                                                        <td>
+                                                            {{ $pkg['item'] }}
+                                                            <span class="badge bg-secondary ms-1">Asset</span>
+                                                        </td>
+                                                        <td>{{ $pkg['category'] }}</td>
+                                                        <td class="text-center">{!! $scheduleRange !!}</td>
+                                                    </tr>
+                                                @empty
+                                                @endforelse
+
+                                                {{-- Show asset categories with no assigned item --}}
+                                                @if(isset($allAssetCategories))
+                                                    @foreach($allAssetCategories as $assetCategory)
+                                                        @if(!in_array($assetCategory->id, $assetCategoryIdsInItems))
+                                                            <tr>
+                                                                <td class="fst-italic text-muted">To be decided</td>
+                                                                <td><span class="fw-semibold">{{ $assetCategory->name }}</span></td>
+                                                                <td class="text-center">{!! $scheduleRange !!}</td>
+                                                            </tr>
+                                                        @endif
+                                                    @endforeach
+                                                @endif
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="alert alert-secondary mt-2 small">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Bookable assets will be assigned and reserved when the service starts. The scheduled use is based on the current wake/burial/interment dates.
+                                    </div>
+                                </div>
+                            @endif
+
+
+
+
+                                    
+                                    </div>
+
+
+
+
+
+
+
+                                    <div class="alert alert-info mt-3 small px-3 py-2">
+                                    <b>Notes:</b>
+                                    <ul class="mb-0 ps-3 small">
+                                        <li>Only consumable item stocks will be deducted upon approval.</li>
+                                        <li>If stock is insufficient, the approval will fail.</li>
+                                        <li>Assets (e.g., vehicles, equipment) will be assigned and reserved when the service starts, not at this stage.</li>
+                                    </ul>
+                                    </div>
+                                </div>
+                                <div class="modal-footer bg-light border-0 rounded-bottom">
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                                    Cancel
+                                    </button>
+                                    <button type="submit" class="btn btn-success px-4">
+                                    <i class="bi bi-check2-circle me-1"></i>
+                                    Confirm Approve &amp; Deduct
                                     </button>
                                 </div>
-                            </form>
-                          </div>
-                        </div>
+                                </form>
+                            </div>
+                            </div>
+
+
 
 {{-- PACKAGE HEADER: Name + Final Price --}}
 <div class="d-flex align-items-center justify-content-between mb-2">
@@ -261,23 +369,73 @@
 
 
                         {{-- PACKAGE ITEM LIST --}}
-                        <h5 class="mb-2"><i class="bi bi-box"></i> Package Inclusions</h5>
-                        <ul class="list-group mb-4">
-                            <li class="list-group-item d-flex fw-bold bg-light">
-                                <span class="flex-fill">Item</span>
-                                <span class="flex-fill">Category</span>
-                                <span class="flex-fill">Brand</span>
-                                <span style="width:80px;">Qty</span>
-                            </li>
-                            @foreach($packageItems as $pkg)
-                                <li class="list-group-item d-flex">
-                                    <span class="flex-fill">{{ $pkg['item'] }}</span>
-                                    <span class="flex-fill">{{ $pkg['category'] }}</span>
-                                    <span class="flex-fill">{{ $pkg['brand'] }}</span>
-                                    <span style="width:80px;">{{ $pkg['quantity'] }}</span>
-                                </li>
-                            @endforeach
-                        </ul>
+<h5 class="mb-3"><i class="bi bi-box"></i> Package Inclusions</h5>
+<ul class="list-group mb-2">
+    <li class="list-group-item bg-light py-2">
+        <strong class="text-primary"><i class="bi bi-droplet-half me-1"></i>Items</strong>
+    </li>
+    <li class="list-group-item d-flex fw-bold bg-light border-bottom-0">
+        <span class="flex-fill">Item</span>
+        <span class="flex-fill">Category</span>
+        <span class="flex-fill">Brand</span>
+        <span style="width:80px;">Qty</span>
+    </li>
+    @php
+        // Filter consumables (is_asset == false)
+        $consumables = collect($packageItems)->filter(fn($pkg) => !($pkg['is_asset'] ?? false));
+        // Filter assets (is_asset == true)
+        $assets = collect($packageItems)->filter(fn($pkg) => $pkg['is_asset'] ?? false);
+        // Collect asset category IDs already listed
+        $assetCategoryIdsInItems = $assets->pluck('category_id')->unique()->toArray();
+    @endphp
+    @forelse($consumables as $pkg)
+        <li class="list-group-item d-flex">
+            <span class="flex-fill">{{ $pkg['item'] }}</span>
+            <span class="flex-fill">{{ $pkg['category'] }}</span>
+            <span class="flex-fill">{{ $pkg['brand'] }}</span>
+            <span style="width:80px;">{{ $pkg['quantity'] }}</span>
+        </li>
+    @empty
+        <li class="list-group-item text-muted fst-italic">No consumable items included.</li>
+    @endforelse
+
+    <li class="list-group-item bg-light py-2 mt-2">
+        <strong class="text-secondary"><i class="bi bi-truck-front me-1"></i>Bookable Assets/Items</strong>
+    </li>
+    <li class="list-group-item d-flex fw-bold bg-light border-bottom-0">
+        <span class="flex-fill">Asset/Item</span>
+        <span class="flex-fill">Category</span>
+
+    </li>
+    @forelse($assets as $pkg)
+        <li class="list-group-item d-flex bg-secondary bg-opacity-25">
+            <span class="flex-fill">
+                {{ $pkg['item'] }}
+                <span class="badge bg-secondary ms-1">Asset</span>
+            </span>
+            <span class="flex-fill">{{ $pkg['category'] }}</span>
+            <span class="flex-fill">{{ $pkg['brand'] }}</span>
+            <span style="width:80px;">{{ $pkg['quantity'] }}</span>
+        </li>
+    @empty
+        {{-- If no asset items, this block will be skipped and asset categories will still be listed below --}}
+    @endforelse
+
+    {{-- Show asset categories with no assigned item --}}
+    @foreach($assetCategories ?? [] as $assetCategory)
+        @if(!in_array($assetCategory->id, $assetCategoryIdsInItems))
+            <li class="list-group-item d-flex bg-secondary bg-opacity-25">
+                <span class="flex-fill text-muted fst-italic">To be decided</span>
+                <span class="flex-fill">
+                    <span class="fw-semibold">{{ $assetCategory->name }}</span>
+                    
+                </span>
+                
+
+            </li>
+        @endif
+    @endforeach
+</ul>
 
                         {{-- SECTION: Deceased Personal Details --}}
                         <h5 class="mb-2"><i class="bi bi-person-vcard"></i> Deceased Personal Details</h5>
@@ -545,19 +703,79 @@
                         </dl>
                         @endif
 
-                        {{-- AGENT INFO --}}
-                        <h5 class="mb-2"><i class="bi bi-person-badge"></i> Assigned Agent</h5>
-                        @if($booking->agent)
-                            <div class="d-flex align-items-center gap-2 mb-4">
-                                <i class="bi bi-person-badge"></i>
-                                <div>
-                                    <div>{{ $booking->agent->name }}</div>
-                                    <div class="text-muted small">{{ $booking->agent->email }}</div>
-                                </div>
-                            </div>
-                        @else
-                            <span class="text-muted mb-4 d-block">No agent assigned yet.</span>
-                        @endif
+<h5 class="mb-2"><i class="bi bi-person-badge"></i> Assigned Agent</h5>
+@php
+    $bookingAgent = $booking->bookingAgent;
+    $agentUser = $bookingAgent?->agentUser; // This will be the User model if assigned
+@endphp
+
+@if($bookingAgent)
+    @if($bookingAgent->need_agent === 'yes')
+        @if($bookingAgent->agent_type === 'client')
+            <div class="mb-3">
+                <div class="mb-2">
+                    <span class="badge bg-info text-dark me-2">Client Agent</span>
+                    @if($agentUser)
+                        {{-- Agent assigned, show name and email --}}
+                        <strong>{{ $agentUser->name }}</strong>
+                        <span class="text-muted small ms-2">{{ $agentUser->email }}</span>
+                    @elseif($bookingAgent->client_agent_email)
+                        {{-- Email provided but agent not yet assigned --}}
+                        <strong>{{ $bookingAgent->client_agent_email }}</strong>
+                    @else
+                        <span class="text-muted">No agent email provided.</span>
+                    @endif
+                </div>
+                {{-- Show button or status based on invitation --}}
+                @if(!$agentUser && $bookingAgent->client_agent_email)
+                    @if($invitationStatus === 'pending')
+                        <span class="text-success">Invitation already sent. Awaiting agent response.</span>
+                    @elseif($invitationStatus === 'accepted')
+                        <span class="badge bg-success">Agent Invitation Accepted</span>
+                    @else
+                        <form action="{{ route('funeral.bookings.agent-invite', $booking->id) }}" method="POST" class="d-inline">
+                            @csrf
+                            <button class="btn btn-primary btn-sm">
+                                <i class="bi bi-envelope"></i> Send Agent Invitation
+                            </button>
+                        </form>
+                    @endif
+                @endif
+            </div>
+        @elseif($bookingAgent->agent_type === 'parlor')
+            @if($agentUser)
+                <div class="d-flex align-items-center gap-2">
+                    
+                    <div>
+                        <div>{{ $agentUser->name }}</div>
+                        <div class="text-muted small">{{ $agentUser->email }} <span class="badge bg-secondary">Funeral Parlor Agent</span></div>
+                    </div>
+                </div>
+                
+            @else
+                {{-- Assign agent form --}}
+                <form action="{{ route('funeral.bookings.assign-agent', $booking->id) }}" method="POST" class="mb-3 d-flex align-items-center gap-2">
+                    @csrf
+                    <label for="agent_user_id" class="me-2 mb-0"><i class="bi bi-person"></i> Assign Agent:</label>
+                    <select name="agent_user_id" id="agent_user_id" class="form-select w-auto" required>
+                        <option value="">-- Select Agent --</option>
+                        @foreach($parlorAgents as $agent)
+                            <option value="{{ $agent->id }}">{{ $agent->name }} ({{ $agent->email }})</option>
+                        @endforeach
+                    </select>
+                    <button class="btn btn-primary btn-sm"><i class="bi bi-plus-circle"></i> Assign</button>
+                </form>
+                @if($parlorAgents->isEmpty())
+                    <span class="text-muted">No available agents to assign.</span>
+                @endif
+            @endif
+        @endif
+    @else
+        <span class="text-muted mb-4 d-block">No agent needed for this booking.</span>
+    @endif
+@else
+    <span class="text-muted mb-4 d-block">No agent assignment record found.</span>
+@endif
 
                         {{-- TIMELINE --}}
                         <h5 class="mb-2"><i class="bi bi-clock-history"></i> Timeline</h5>

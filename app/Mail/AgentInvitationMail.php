@@ -5,8 +5,6 @@ namespace App\Mail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
-use Illuminate\Mail\Mailables\Content;
-use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
 class AgentInvitationMail extends Mailable
@@ -15,13 +13,23 @@ class AgentInvitationMail extends Mailable
 
     public $url;
     public $funeralUser;
+    public $client; // Optional: the client requesting the agent
+    public $booking; // Optional: booking context
 
-    public function __construct($url, $funeralUser)
+    /**
+     * Create a new message instance.
+     */
+    public function __construct($url, $funeralUser, $client = null, $booking = null)
     {
         $this->url = $url;
         $this->funeralUser = $funeralUser;
+        $this->client = $client;
+        $this->booking = $booking;
     }
 
+    /**
+     * Build the message.
+     */
     public function build()
     {
         return $this->subject('You are invited to become an Agent')

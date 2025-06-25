@@ -7,6 +7,7 @@
                 <i class="bi bi-plus-circle me-1"></i> Add Category
             </a>
         </div>
+
         <div class="table-responsive bg-dark rounded shadow">
             <table class="table table-dark table-hover table-bordered align-middle mb-0">
                 <thead class="table-secondary text-dark">
@@ -14,8 +15,8 @@
                         <th scope="col">Name</th>
                         <th scope="col">Description</th>
                         <th scope="col">Type</th>
+                        <th scope="col">Reservation Mode</th>
                         <th scope="col" class="text-center">Actions</th>
-                        
                     </tr>
                 </thead>
                 <tbody>
@@ -30,7 +31,21 @@
                                     <span class="badge bg-secondary">Consumable</span>
                                 @endif
                             </td>
-
+                            <td>
+                                @if($category->is_asset)
+                                    @if($category->reservation_mode === 'continuous')
+                                        <span class="badge bg-primary">Continuous</span>
+                                        <span class="text-muted small ms-1">(multi-day use)</span>
+                                    @elseif($category->reservation_mode === 'single_event')
+                                        <span class="badge bg-warning text-dark">Single Event</span>
+                                        <span class="text-muted small ms-1">(by date/time)</span>
+                                    @else
+                                        <span class="badge bg-secondary">-</span>
+                                    @endif
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
+                            </td>
                             <td class="text-center">
                                 <a href="{{ route('funeral.categories.edit', $category) }}" class="btn btn-sm btn-primary me-1">
                                     <i class="bi bi-pencil"></i> Edit
@@ -47,7 +62,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="3" class="text-center text-muted">No categories found.</td>
+                            <td colspan="5" class="text-center text-muted">No categories found.</td>
                         </tr>
                     @endforelse
                 </tbody>

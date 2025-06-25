@@ -39,7 +39,15 @@
                                                 <i class="bi bi-hourglass-split"></i> {{ ucfirst($booking->status) }}
                                             </span>
                                         </td>
-                                        <td><i class="bi bi-people me-1"></i> {{ $booking->agent->name ?? 'Unassigned' }}</td>
+                                        @php
+                                            $assignedAgent = $booking->bookingAgent->agentUser ?? null;
+                                        @endphp
+                                        <td>
+                                            <i class="bi bi-person-badge me-1"></i>
+                                            {{ $assignedAgent ? $assignedAgent->name : 'Unassigned' }}
+                                        </td>
+
+
                                         <td><i class="bi bi-calendar-event me-1"></i> {{ $booking->created_at->format('M d, Y') }}</td>
                                         <td>
                                             <a href="{{ route('funeral.bookings.show', $booking->id) }}" class="btn btn-outline-primary btn-sm">
@@ -87,7 +95,13 @@
                                                 <i class="bi bi-pencil"></i> Filling Up
                                             </span>
                                         </td>
-                                        <td><i class="bi bi-people me-1"></i> {{ $booking->agent->name ?? 'Unassigned' }}</td>
+                                        @php
+                                            $assignedAgent = $booking->bookingAgent->agentUser ?? null;
+                                        @endphp
+                                        <td>
+                                            <i class="bi bi-person-badge me-1"></i>
+                                            {{ $assignedAgent ? $assignedAgent->name : 'Unassigned' }}
+                                        </td>
                                         <td><i class="bi bi-calendar-event me-1"></i> {{ $booking->updated_at->format('M d, Y') }}</td>
                                         <td>
                                             <a href="{{ route('funeral.bookings.show', $booking->id) }}" class="btn btn-outline-primary btn-sm">
@@ -136,9 +150,12 @@
                                                 <i class="bi bi-hourglass-top"></i> For Initial Review
                                             </span>
                                         </td>
+                                        @php
+                                            $assignedAgent = $booking->bookingAgent->agentUser ?? null;
+                                        @endphp
                                         <td>
-                                            <i class="bi bi-people me-1"></i>
-                                            {{ $booking->agent->name ?? 'Unassigned' }}
+                                            <i class="bi bi-person-badge me-1"></i>
+                                            {{ $assignedAgent ? $assignedAgent->name : 'Unassigned' }}
                                         </td>
                                         <td>
                                             <i class="bi bi-calendar-event me-1"></i>
@@ -184,7 +201,13 @@
                                         <td><i class="bi bi-person-circle me-1"></i> {{ $booking->client->name ?? 'N/A' }}</td>
                                         <td><i class="bi bi-box2-heart me-1"></i> {{ $booking->package->name ?? 'N/A' }}</td>
                                         <td><i class="bi bi-calendar-check me-1"></i> {{ $booking->updated_at->format('M d, Y') }}</td>
-                                        <td><i class="bi bi-people me-1"></i> {{ $booking->agent->name ?? 'Unassigned' }}</td>
+                                        @php
+                                            $assignedAgent = $booking->bookingAgent->agentUser ?? null;
+                                        @endphp
+                                        <td>
+                                            <i class="bi bi-person-badge me-1"></i>
+                                            {{ $assignedAgent ? $assignedAgent->name : 'Unassigned' }}
+                                        </td>
                                         <td>
                                             <a href="{{ route('funeral.bookings.show', $booking->id) }}" class="btn btn-outline-primary btn-sm">
                                                 <i class="bi bi-eye"></i> View
@@ -231,7 +254,13 @@
                                                 <i class="bi bi-shield-check"></i> Approved
                                             </span>
                                         </td>
-                                        <td><i class="bi bi-people me-1"></i> {{ $booking->agent->name ?? 'Unassigned' }}</td>
+                                        @php
+                                            $assignedAgent = $booking->bookingAgent->agentUser ?? null;
+                                        @endphp
+                                        <td>
+                                            <i class="bi bi-person-badge me-1"></i>
+                                            {{ $assignedAgent ? $assignedAgent->name : 'Unassigned' }}
+                                        </td>
                                         <td><i class="bi bi-calendar-check me-1"></i> {{ $booking->updated_at->format('M d, Y') }}</td>
                                         <td>
                                             <a href="{{ route('funeral.bookings.show', $booking->id) }}" class="btn btn-outline-primary btn-sm">
@@ -279,7 +308,13 @@
                                                 <i class="bi bi-arrow-repeat"></i> Ongoing
                                             </span>
                                         </td>
-                                        <td><i class="bi bi-people me-1"></i> {{ $booking->agent->name ?? 'Unassigned' }}</td>
+                                        @php
+                                            $assignedAgent = $booking->bookingAgent->agentUser ?? null;
+                                        @endphp
+                                        <td>
+                                            <i class="bi bi-person-badge me-1"></i>
+                                            {{ $assignedAgent ? $assignedAgent->name : 'Unassigned' }}
+                                        </td>
                                         <td><i class="bi bi-calendar-check me-1"></i> {{ $booking->updated_at->format('M d, Y') }}</td>
                                         <td>
                                             <a href="{{ route('funeral.bookings.show', $booking->id) }}" class="btn btn-outline-primary btn-sm">
@@ -327,7 +362,13 @@
                                                 <i class="bi bi-check-circle"></i> Completed
                                             </span>
                                         </td>
-                                        <td><i class="bi bi-people me-1"></i> {{ $booking->agent->name ?? 'Unassigned' }}</td>
+                                        @php
+                                            $assignedAgent = $booking->bookingAgent->agentUser ?? null;
+                                        @endphp
+                                        <td>
+                                            <i class="bi bi-person-badge me-1"></i>
+                                            {{ $assignedAgent ? $assignedAgent->name : 'Unassigned' }}
+                                        </td>
                                         <td><i class="bi bi-calendar-check me-1"></i> {{ $booking->updated_at->format('M d, Y') }}</td>
                                         <td>
                                             <a href="{{ route('funeral.bookings.show', $booking->id) }}" class="btn btn-outline-primary btn-sm">

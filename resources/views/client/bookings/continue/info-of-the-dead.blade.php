@@ -1,10 +1,17 @@
 {{-- resources/views/client/bookings/continue/info-of-the-dead.blade.php --}}
 
 <x-client-layout>
+
+
+
+
+
     <div class="container py-5">
         <h2 class="fw-bold mb-4" style="color: #1565c0;">
             <i class="bi bi-person-vcard me-2"></i> Personal & Service Details
         </h2>
+        {{-- Show alert or disable form fields if not editable --}}
+
 
         <form action="{{ route('client.bookings.details.update', $booking->id) }}" method="POST" class="bg-white rounded shadow-sm p-4">
             @csrf
@@ -91,7 +98,7 @@
                     <div class="col-md-3">
                         <label class="form-label">Time of Death</label>
                         <input name="deceased_time_of_death" type="text" class="form-control"
-                            value="{{ old('deceased_time_of_death', $detail->deceased_time_of_death ?? '') }}">
+                            value="{{ old('deceased_time_of_death', $detail->deceased_time_of_death ?? '') }}" placeholder='eg.10:30 PM'>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Cause of Death</label>
@@ -132,7 +139,7 @@
                     <div class="col-md-3">
                         <label class="form-label">Time</label>
                         <input name="interment_cremation_time" type="text" class="form-control"
-                            value="{{ old('interment_cremation_time', $detail->interment_cremation_time ?? '') }}">
+                            value="{{ old('interment_cremation_time', $detail->interment_cremation_time ?? '') }}" placeholder='e.g 8:00 AM'>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Cemetery / Crematory</label>
@@ -378,7 +385,7 @@
             {{-- SUBMIT --}}
             <div class="mt-4">
                 <button type="submit" class="btn btn-primary btn-lg w-100">
-                    <i class="bi bi-check2-circle"></i> Submit & Continue
+                    <i class="bi bi-check2-circle"></i> Submit
                 </button>
             </div>
         </form>

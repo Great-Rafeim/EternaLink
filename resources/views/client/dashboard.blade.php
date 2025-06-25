@@ -53,6 +53,7 @@
                                             'canceled'     => ['label' => 'Canceled',       'color' => 'danger',   'icon' => 'slash-circle'],
                                         ];
                                         $status = $statuses[$booking->status] ?? ['label' => ucfirst($booking->status), 'color' => 'secondary', 'icon' => 'question-circle'];
+                                        $assignedAgent = $booking->bookingAgent->agentUser ?? null;
                                     @endphp
 
                                         <tr>
@@ -60,7 +61,9 @@
                                                 <div>
                                                     <div class="fw-bold">{{ $booking->package->name ?? 'N/A' }}</div>
                                                     <div class="text-muted small">
-                                                        {{ $details['deceased_name'] ?? '' }}
+                                                        {{-- Add deceased name if available --}}
+                                                        {{ $booking->detail->deceased_first_name ?? '' }}
+                                                        {{ $booking->detail->deceased_last_name ?? '' }}
                                                     </div>
                                                 </div>
                                             </td>
@@ -68,10 +71,10 @@
                                                 {{ $booking->funeralHome->name ?? 'N/A' }}
                                             </td>
                                             <td>
-                                                @if($booking->agent)
+                                                @if($assignedAgent)
                                                     <div class="d-flex align-items-center gap-2">
                                                         <i class="bi bi-person-badge"></i>
-                                                        <span>{{ $booking->agent->name }}</span>
+                                                        <span>{{ $assignedAgent->name }}</span>
                                                     </div>
                                                 @else
                                                     <span class="text-muted small">Not assigned</span>
@@ -85,8 +88,8 @@
                                             <td>
                                                 {{ $booking->created_at->format('M d, Y') }}
                                             </td>
-                                            <td>
-    {{-- PHASED MAIN ACTIONS --}}
+<td>
+    {{-- Booking Step Actions --}}
     @if($booking->status === 'confirmed')
         <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
            class="btn btn-success btn-sm rounded-pill mb-1">
@@ -94,43 +97,61 @@
             Fill Out Booking Details
         </a>
         <div class="small text-warning mt-1">Please complete required info</div>
+
     @elseif($booking->status === 'in_progress')
+        <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
+           class="btn btn-outline-secondary btn-sm rounded-pill mb-1">
+            <i class="bi bi-pencil-square"></i>
+            Edit Booking Details
+        </a>
         <a href="{{ route('client.bookings.continue.info', $booking->id) }}"
            class="btn btn-warning btn-sm rounded-pill mb-1">
             <i class="bi bi-pencil"></i>
-            Continue Filling Out Forms
+            Continue Filling Out Personal Details
         </a>
-        <div class="small text-warning mt-1">Continue your booking information</div>
+        <div class="small text-warning mt-1">You may update your details anytime before parlor review.</div>
+
     @elseif($booking->status === 'for_initial_review')
+        {{-- Allow editing Booking Details (Phase 2) --}}
+        <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
+           class="btn btn-outline-secondary btn-sm rounded-pill mb-1">
+            <i class="bi bi-pencil-square"></i>
+            Edit Booking Details
+        </a>
         <a href="{{ route('client.bookings.show', $booking->id) }}"
            class="btn btn-info btn-sm rounded-pill mb-1">
             <i class="bi bi-hourglass-top"></i>
-            Waiting for Funeral Parlor to Set Fees
+            Waiting for Funeral Parlor Review
         </a>
-        <div class="small text-muted mt-1">You can only view your booking while waiting.</div>
-    @elseif($booking->status === 'for_review')
+        <div class="small text-muted mt-1">You can edit booking details while waiting for review.</div>
 
+    @elseif($booking->status === 'for_review')
         <a href="{{ route('client.bookings.show', $booking->id) }}"
            class="btn btn-info btn-sm rounded-pill mb-1">
             <i class="bi bi-journal-check"></i>
-            Waiting for Funeral Parlor Review        
+            Waiting for Funeral Parlor Review
         </a>
+        <div class="small text-muted mt-1">You can only view your booking while waiting.</div>
+
     @elseif($booking->status === 'approved')
         <span class="badge bg-success px-3 py-2">
             <i class="bi bi-shield-check"></i> Ready to Start
         </span>
+
     @elseif($booking->status === 'ongoing')
         <a href="{{ route('client.bookings.show', $booking->id) }}"
            class="btn btn-primary btn-sm rounded-pill mb-1">
             <i class="bi bi-arrow-repeat"></i>
             Service In Progress
         </a>
+
     @elseif($booking->status === 'completed')
         <a href="{{ route('client.bookings.show', $booking->id) }}"
            class="btn btn-dark btn-sm rounded-pill mb-1">
             <i class="bi bi-check-circle"></i>
             View Completed Booking
         </a>
+
     @else
         <a href="{{ route('client.bookings.show', $booking->id) }}"
            class="btn btn-outline-primary btn-sm rounded-pill mb-1">

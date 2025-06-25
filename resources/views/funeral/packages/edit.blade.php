@@ -1,7 +1,7 @@
 <x-layouts.funeral>
     <div class="container py-4">
         <h2 class="mb-4 text-white">Edit Funeral Service Package</h2>
-        <form action="{{ route('funeral.packages.update', $package->id) }}" method="POST" id="package-form" enctype="multipart/form-data"> 
+        <form action="{{ route('funeral.packages.update', $package->id) }}" method="POST" id="package-form" enctype="multipart/form-data">
             @csrf
             @method('PUT')
 
@@ -31,9 +31,53 @@
                 <input type="number" name="total_price" class="form-control bg-secondary text-white" readonly id="total-price" value="0.00">
             </div>
 
+{{-- Bookable Asset Categories --}}
+<div class="mb-3">
+    <label class="form-label text-white">Bookable Asset Categories</label>
+    <div id="asset-category-list">
+        @php
+            // Build asset price lookup and selection
+            $oldAssets = old('assets') ?? null;
+            $initialAssets = [];
+            if ($oldAssets) {
+                foreach ($oldAssets as $a) {
+                    $initialAssets[$a['category_id']] = $a['price'];
+                }
+            } else {
+                foreach($package->assetCategories as $ac) {
+                    $initialAssets[$ac->inventory_category_id] = $ac->price;
+                }
+            }
+        @endphp
+        @foreach($categories as $category)
+            @if($category->is_asset)
+                <div class="form-check mb-2 d-flex align-items-center gap-3">
+                    <input class="form-check-input asset-category-checkbox"
+                        type="checkbox"
+                        value="{{ $category->id }}"
+                        id="asset-category-{{ $category->id }}"
+                        {{ array_key_exists($category->id, $initialAssets) ? 'checked' : '' }}>
+                    <label class="form-check-label text-white flex-grow-1" for="asset-category-{{ $category->id }}">
+                        {{ $category->name }} <span class="badge bg-info">Asset</span>
+                    </label>
+                    <input type="number" min="0" step="0.01"
+                        class="form-control form-control-sm asset-category-price-input"
+                        data-category-id="{{ $category->id }}"
+                        style="width:120px;{{ array_key_exists($category->id, $initialAssets) ? '' : 'display:none' }}"
+                        placeholder="Asset Price"
+                        value="{{ old('assets.' . $loop->index . '.price', $initialAssets[$category->id] ?? '') }}">
+                </div>
+            @endif
+        @endforeach
+    </div>
+    <div id="asset-hidden-fields"></div>
+</div>
+
+
+            {{-- Consumable Categories --}}
             <div class="mb-3">
                 <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#categoryModal">
-                    Add Category
+                    Add Category and Items
                 </button>
             </div>
             <div id="selected-categories"></div>
@@ -47,16 +91,18 @@
         <div class="modal-dialog">
             <div class="modal-content bg-dark text-white">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="categoryModalLabel">Select a Category</h5>
+                    <h5 class="modal-title" id="categoryModalLabel">Select a Consumable Category</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <ul class="list-group">
                         @foreach($categories as $category)
-                            <li class="list-group-item list-group-item-action d-flex justify-content-between align-items-center select-category"
-                                data-category-id="{{ $category->id }}" data-category-name="{{ $category->name }}">
-                                {{ $category->name }}
-                            </li>
+                            @if(!$category->is_asset)
+                                <li class="list-group-item list-group-item-action d-flex justify-content-between align-items-center select-category"
+                                    data-category-id="{{ $category->id }}" data-category-name="{{ $category->name }}">
+                                    {{ $category->name }}
+                                </li>
+                            @endif
                         @endforeach
                     </ul>
                 </div>
@@ -85,36 +131,89 @@
     {{-- JavaScript --}}
     <script>
         const itemsByCategory = @json($itemsByCategory);
-        let selectedCategories = @json(array_map('strval', array_keys($currentSelection))); // ensure string keys
+        const categoriesList = @json($categories);
+
+        // Initial data for asset categories
+        let selectedAssets = [];
+        @foreach($categories as $category)
+            @if($category->is_asset && array_key_exists($category->id, $initialAssets))
+                selectedAssets.push({
+                    category_id: "{{ $category->id }}",
+                    price: "{{ $initialAssets[$category->id] }}"
+                });
+            @endif
+        @endforeach
+
+        let selectedCategories = @json(array_map('strval', array_keys($currentSelection)));
         let selectedItems = @json($currentSelection);
 
         function recalculateTotal() {
             let total = 0;
+            // Consumables
             for (const catId in selectedItems) {
                 selectedItems[catId].forEach(item => {
                     total += (item.price * item.quantity);
                 });
             }
+            // Asset categories
+            selectedAssets.forEach(asset => {
+                let price = parseFloat(asset.price) || 0;
+                total += price;
+            });
             document.getElementById('total-price').value = total.toFixed(2);
         }
 
+        // Asset Categories logic
         document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.select-category').forEach(li => {
-                li.addEventListener('click', function() {
-                    const catId = this.getAttribute('data-category-id').toString();
-                    const catName = this.getAttribute('data-category-name');
-                    if (!selectedCategories.includes(catId)) {
-                        selectedCategories.push(catId);
-                        selectedItems[catId] = [];
-                        renderCategories();
+            // Check/uncheck asset category
+            document.querySelectorAll('.asset-category-checkbox').forEach(cb => {
+                cb.addEventListener('change', function() {
+                    const catId = this.value;
+                    const priceInput = document.querySelector('.asset-category-price-input[data-category-id="'+catId+'"]');
+                    if (this.checked) {
+                        priceInput.style.display = "inline-block";
+                        // Add to selectedAssets if not exists
+                        if (!selectedAssets.find(a => a.category_id == catId)) {
+                            selectedAssets.push({category_id: catId, price: priceInput.value || 0});
+                        }
+                    } else {
+                        priceInput.style.display = "none";
+                        priceInput.value = "";
+                        selectedAssets = selectedAssets.filter(a => a.category_id != catId);
                     }
-                    const categoryModal = bootstrap.Modal.getInstance(document.getElementById('categoryModal'));
-                    categoryModal.hide();
+                    updateAssetHiddenFields();
+                    recalculateTotal();
                 });
             });
+            // Price field changes
+            document.querySelectorAll('.asset-category-price-input').forEach(inp => {
+                inp.addEventListener('input', function() {
+                    const catId = this.getAttribute('data-category-id');
+                    let asset = selectedAssets.find(a => a.category_id == catId);
+                    if (asset) {
+                        asset.price = this.value;
+                    }
+                    updateAssetHiddenFields();
+                    recalculateTotal();
+                });
+            });
+            // On load, update hidden fields and recalc total
+            updateAssetHiddenFields();
             renderCategories();
+            recalculateTotal();
         });
 
+        // Render hidden fields for submission
+        function updateAssetHiddenFields() {
+            let html = '';
+            selectedAssets.forEach((asset, i) => {
+                html += `<input type="hidden" name="assets[${i}][category_id]" value="${asset.category_id}">`;
+                html += `<input type="hidden" name="assets[${i}][price]" value="${asset.price}">`;
+            });
+            document.getElementById('asset-hidden-fields').innerHTML = html;
+        }
+
+        // Consumable categories and items
         function renderCategories() {
             let html = '';
             selectedCategories.forEach(catId => {
@@ -166,8 +265,7 @@
         }
 
         function getCategoryName(catId) {
-            catId = parseInt(catId);
-            let cat = @json($categories).find(c => c.id === catId);
+            let cat = categoriesList.find(c => c.id == catId);
             return cat ? cat.name : 'Unknown';
         }
 

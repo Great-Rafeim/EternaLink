@@ -6,12 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class InventoryCategory extends Model
 {
-    // Make sure to include 'is_asset' and 'funeral_home_id'!
     protected $fillable = [
         'name',
         'description',
         'is_asset',
+        'reservation_mode',    // <-- added
+        'image',
         'funeral_home_id',
+
     ];
 
     protected $casts = [
@@ -27,4 +29,22 @@ class InventoryCategory extends Model
     {
         return $this->hasMany(InventoryItem::class);
     }
+
+    // Optional scope for assets
+    public function scopeAssets($query)
+    {
+        return $query->where('is_asset', true);
+    }
+
+public function packages()
+{
+    return $this->belongsToMany(
+        ServicePackage::class,
+        'service_package_components',
+        'inventory_category_id',
+        'service_package_id'
+    );
+}
+
+
 }

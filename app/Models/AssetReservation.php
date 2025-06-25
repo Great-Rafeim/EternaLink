@@ -12,10 +12,14 @@ class AssetReservation extends Model
     protected $fillable = [
         'inventory_item_id',
         'booking_id',
+        'shared_with_partner_id',
         'reserved_start',
         'reserved_end',
         'status',
         'created_by',
+        // New:
+        'borrowed_item_id',
+        'resource_request_id',
     ];
 
     protected $casts = [
@@ -23,7 +27,25 @@ class AssetReservation extends Model
         'reserved_end' => 'datetime',
     ];
 
-    // Relationship to InventoryItem
+    // In your AssetReservation model
+protected static function booted()
+{
+    static::creating(function ($reservation) {
+        // Only require resource_request_id for partner asset reservations
+        $isPartner = 
+            $reservation->shared_with_partner_id || 
+            $reservation->borrowed_item_id || 
+            ($reservation->inventoryItem && $reservation->inventoryItem->is_borrowed);
+
+        if ($isPartner && is_null($reservation->resource_request_id)) {
+            throw new \Exception('resource_request_id must be set for partner asset reservations');
+        }
+    });
+}
+
+
+
+
     public function inventoryItem()
     {
         return $this->belongsTo(InventoryItem::class, 'inventory_item_id');
@@ -42,7 +64,18 @@ class AssetReservation extends Model
     public function sharedWithPartner()
     {
         return $this->belongsTo(User::class, 'shared_with_partner_id');
-}
+    }
+
+    public function resourceRequest()
+    {
+        return $this->belongsTo(ResourceRequest::class, 'resource_request_id');
+    }
+
+    // NEW: Relationship to borrowed inventory item (for tracking)
+    public function borrowedItem()
+    {
+        return $this->belongsTo(InventoryItem::class, 'borrowed_item_id');
+    }
 
 
 }

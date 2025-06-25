@@ -1,16 +1,101 @@
 <x-client-layout>
+
+<style>
+.timeline {
+    position: relative;
+    padding-left: 1.8rem;
+}
+.timeline-item {
+    border-left: 2px solid #0d6efd22;
+    margin-left: 0.3rem;
+}
+.timeline-dot {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: #0d6efd;
+    left: -0.7rem;
+    top: 1.2rem;
+    z-index: 2;
+}
+.timeline-item:last-child {
+    border-left: 2px solid transparent;
+}
+</style>
+
+
     <div class="container py-5">
         <div class="row justify-content-center">
             <div class="col-lg-8">
                 <a href="{{ route('client.dashboard') }}" class="btn btn-link mb-3">
                     <i class="bi bi-arrow-left"></i> Back to Dashboard
                 </a>
+
+@if($booking->status === \App\Models\Booking::STATUS_ONGOING)
+    <div class="card shadow mb-4 border-0 rounded-4 animate__animated animate__fadeInDown">
+        <div class="card-header bg-gradient bg-primary text-white py-3 rounded-top-4 d-flex align-items-center gap-2">
+            <i class="bi bi-broadcast display-6"></i>
+            <span class="fw-bold fs-5">Service Updates from Funeral Parlor</span>
+        </div>
+        <div class="card-body px-4 py-3 bg-light rounded-bottom-4">
+            @if($serviceLogs->count())
+                <div class="timeline">
+                    @foreach($serviceLogs as $log)
+                        <div class="timeline-item position-relative mb-4 pb-2 ps-4">
+                            <span class="timeline-dot bg-primary position-absolute top-0 start-0 translate-middle-y"></span>
+                            <div class="d-flex align-items-center mb-1">
+                                <i class="bi bi-person-circle text-primary me-2"></i>
+                                <span class="fw-semibold text-primary">{{ $log->user->name ?? 'Funeral Staff' }}</span>
+                                <span class="text-muted small ms-2">
+                                    <i class="bi bi-clock"></i>
+                                    {{ $log->created_at->format('M d, Y h:i A') }}
+                                </span>
+                            </div>
+                            <div class="ps-4">
+                                <div class="alert alert-primary mb-0 py-2 px-3 shadow-sm border-0 rounded-3">
+                                    {!! nl2br(e($log->message)) !!}
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-info-circle display-6 d-block mb-2"></i>
+                    <span class="fw-medium">No updates have been posted by the funeral parlor yet.</span>
+                </div>
+            @endif
+        </div>
+    </div>
+@endif
+
                 <div class="card shadow-lg border-0 rounded-4 p-4">
                     <div class="card-body">
-                        <a href="{{ route('client.bookings.details.exportPdf', $booking->id) }}"
-                           class="btn btn-outline-primary mb-3 float-end" target="_blank">
-                            <i class="bi bi-filetype-pdf"></i> Export as PDF
-                        </a>
+
+<div class="mb-3 d-flex justify-content-end align-items-center gap-2" style="min-height:42px;">
+    <a href="{{ route('client.bookings.details.exportPdf', $booking->id) }}"
+       class="btn btn-outline-primary"
+       target="_blank">
+        <i class="bi bi-filetype-pdf"></i> Export as PDF
+    </a>
+
+    @if($booking->status === 'for_initial_review')
+        <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
+           class="btn btn-outline-secondary ms-1">
+            <i class="bi bi-pencil-square"></i>
+            Edit Booking Details
+        </a>
+    @elseif($booking->status === 'for_review')
+        <a href="{{ route('client.bookings.continue.info', $booking->id) }}"
+           class="btn btn-outline-warning ms-1">
+            <i class="bi bi-pencil"></i>
+            Edit Personal Details
+        </a>
+    @endif
+</div>
+
+                        
 @php
     $details = $booking->detail;
     $statuses = [
@@ -86,24 +171,75 @@
                         <div class="mb-2 text-muted">{{ $booking->funeralHome->name ?? 'N/A' }}</div>
                         <hr class="my-4">
 
-                        {{-- PACKAGE ITEM LIST --}}
-                        <h5 class="mb-2"><i class="bi bi-box"></i> Package Inclusions</h5>
-                        <ul class="list-group mb-4">
-                            <li class="list-group-item d-flex fw-bold bg-light">
-                                <span class="flex-fill">Item</span>
-                                <span class="flex-fill">Category</span>
-                                <span class="flex-fill">Brand</span>
-                                <span style="width:80px;">Qty</span>
-                            </li>
-                            @foreach($packageItems as $pkg)
-                                <li class="list-group-item d-flex">
-                                    <span class="flex-fill">{{ $pkg['item'] }}</span>
-                                    <span class="flex-fill">{{ $pkg['category'] }}</span>
-                                    <span class="flex-fill">{{ $pkg['brand'] }}</span>
-                                    <span style="width:80px;">{{ $pkg['quantity'] }}</span>
-                                </li>
-                            @endforeach
-                        </ul>
+<h5 class="mb-3"><i class="bi bi-box"></i> Package Inclusions</h5>
+<ul class="list-group mb-2">
+    <li class="list-group-item bg-light py-2">
+        <strong class="text-primary"><i class="bi bi-droplet-half me-1"></i>Items</strong>
+    </li>
+    <li class="list-group-item d-flex fw-bold bg-light border-bottom-0">
+        <span class="flex-fill">Item</span>
+        <span class="flex-fill">Category</span>
+        <span class="flex-fill">Brand</span>
+        <span style="width:80px;">Qty</span>
+    </li>
+    @php
+        // Filter consumables (is_asset == false)
+        $consumables = collect($packageItems)->filter(fn($pkg) => !($pkg['is_asset'] ?? false));
+        // Filter assets (is_asset == true)
+        $assets = collect($packageItems)->filter(fn($pkg) => $pkg['is_asset'] ?? false);
+        // Collect asset category IDs already listed
+        $assetCategoryIdsInItems = $assets->pluck('category_id')->unique()->toArray();
+    @endphp
+    @forelse($consumables as $pkg)
+        <li class="list-group-item d-flex">
+            <span class="flex-fill">{{ $pkg['item'] }}</span>
+            <span class="flex-fill">{{ $pkg['category'] }}</span>
+            <span class="flex-fill">{{ $pkg['brand'] }}</span>
+            <span style="width:80px;">{{ $pkg['quantity'] }}</span>
+        </li>
+    @empty
+        <li class="list-group-item text-muted fst-italic">No consumable items included.</li>
+    @endforelse
+
+    <li class="list-group-item bg-light py-2 mt-2">
+        <strong class="text-secondary"><i class="bi bi-truck-front me-1"></i>Bookable Assets/Items</strong>
+    </li>
+    <li class="list-group-item d-flex fw-bold bg-light border-bottom-0">
+        <span class="flex-fill">Asset/Item</span>
+        <span class="flex-fill">Category</span>
+
+    </li>
+    @forelse($assets as $pkg)
+        <li class="list-group-item d-flex bg-secondary bg-opacity-25">
+            <span class="flex-fill">
+                {{ $pkg['item'] }}
+                <span class="badge bg-secondary ms-1">Asset</span>
+            </span>
+            <span class="flex-fill">{{ $pkg['category'] }}</span>
+            <span class="flex-fill">{{ $pkg['brand'] }}</span>
+            <span style="width:80px;">{{ $pkg['quantity'] }}</span>
+        </li>
+    @empty
+        {{-- If no asset items, this block will be skipped and asset categories will still be listed below --}}
+    @endforelse
+
+    {{-- Show asset categories with no assigned item --}}
+    @foreach($assetCategories ?? [] as $assetCategory)
+        @if(!in_array($assetCategory->id, $assetCategoryIdsInItems))
+            <li class="list-group-item d-flex bg-secondary bg-opacity-25">
+                <span class="flex-fill text-muted fst-italic">To be decided</span>
+                <span class="flex-fill">
+                    <span class="fw-semibold">{{ $assetCategory->name }}</span>
+                    
+                </span>
+                
+
+            </li>
+        @endif
+    @endforeach
+</ul>
+
+
 
                         {{-- SECTION: Deceased Personal Details --}}
                         <h5 class="mb-2"><i class="bi bi-person-vcard"></i> Deceased Personal Details</h5>
@@ -338,17 +474,21 @@
 
                         {{-- AGENT INFO --}}
                         <h5 class="mb-2"><i class="bi bi-person-badge"></i> Assigned Agent</h5>
-                        @if($booking->agent)
+                        @php
+                            $assignedAgent = $booking->bookingAgent?->agentUser;
+                        @endphp
+                        @if($assignedAgent)
                             <div class="d-flex align-items-center gap-2 mb-4">
-                                <i class="bi bi-person-badge"></i>
+                                
                                 <div>
-                                    <div>{{ $booking->agent->name }}</div>
-                                    <div class="text-muted small">{{ $booking->agent->email }}</div>
+                                    <div>{{ $assignedAgent->name }}</div>
+                                    <div class="text-muted small">{{ $assignedAgent->email }}</div>
                                 </div>
                             </div>
                         @else
                             <span class="text-muted mb-4 d-block">No agent assigned yet.</span>
                         @endif
+
 
                         {{-- TIMELINE --}}
                         <h5 class="mb-2"><i class="bi bi-clock-history"></i> Timeline</h5>

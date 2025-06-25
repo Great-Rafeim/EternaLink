@@ -6,7 +6,12 @@
 <div class="container-fluid">
     {{-- Welcome Header --}}
     <div class="mb-4">
-        <h2 class="fw-bold">Welcome back, {{ Auth::user()->name }} 👋</h2>
+        @if(Auth::check())
+            <h2 class="fw-bold">Welcome back, {{ Auth::user()->name }} 👋</h2>
+        @else
+            <h2 class="fw-bold">Welcome back 👋</h2>
+        @endif
+
         <p class="text-muted">Here's an overview of your system.</p>
     </div>
 

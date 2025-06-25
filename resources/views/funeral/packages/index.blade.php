@@ -1,4 +1,10 @@
 <x-layouts.funeral>
+<style>
+    .rounded-rectangle, .rounded-4 {
+        border-radius: 1rem !important;
+    }
+</style>
+
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="text-white">Funeral Service Packages</h2>
@@ -60,80 +66,173 @@
                 </div>
             </div>
 
-            <!-- View Modal -->
-            <div class="modal fade" id="viewPackageModal{{ $package->id }}" tabindex="-1" aria-labelledby="viewPackageModalLabel{{ $package->id }}" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                    <div class="modal-content bg-dark text-white border-secondary">
-                        <div class="modal-header border-secondary">
-                            <h5 class="modal-title" id="viewPackageModalLabel{{ $package->id }}">
-                                <i class="bi bi-box-seam"></i> {{ $package->name }}
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- View Modal -->
+<div class="modal fade" id="viewPackageModal{{ $package->id }}" tabindex="-1" aria-labelledby="viewPackageModalLabel{{ $package->id }}" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content bg-dark text-white border-secondary rounded-4">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title d-flex align-items-center gap-2" id="viewPackageModalLabel{{ $package->id }}">
+                    <i class="bi bi-box-seam"></i>
+                    <span>{{ $package->name }}</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body pb-0">
+                {{-- Package Image --}}
+                @if($package->image)
+                    <div class="mb-3 text-center">
+                        <img src="{{ asset('storage/'.$package->image) }}"
+                             alt="Package Image"
+                             class="img-fluid rounded-3 shadow"
+                             style="max-height: 180px; object-fit: cover; cursor:pointer;"
+                             onclick="enlargeImage(this)">
+                    </div>
+                @else
+                    <div class="mb-3 d-flex align-items-center justify-content-center bg-secondary bg-opacity-25 rounded-3" style="height: 180px;">
+                        <div class="text-center w-100">
+                            <i class="bi bi-image" style="font-size: 2.5rem; color: #aab2bd;"></i>
+                            <div class="text-muted small mt-1">No Image</div>
                         </div>
+                    </div>
+                @endif
 
-                        @if($package->image)
-                            <img src="{{ asset('storage/'.$package->image) }}"
-                                 alt="Package Image"
-                                 class="img-fluid rounded mb-3"
-                                 style="max-height:180px;object-fit:cover;">
-                        @else
-                            <div class="d-flex align-items-center justify-content-center bg-secondary bg-opacity-25 mb-3"
-                                 style="height: 180px;">
-                                <div class="text-center w-100">
-                                    <i class="bi bi-image" style="font-size: 2.5rem; color: #aab2bd;"></i>
-                                    <div class="text-muted small mt-1">No Image</div>
-                                </div>
-                            </div>
-                        @endif
+                <div class="mb-4">
+                    <div class="text-secondary small mb-1">
+                        Created: {{ $package->created_at->format('F j, Y') }}
+                    </div>
 
-                        <div class="modal-body">
-                            <div class="mb-3"><strong>Description:</strong> {{ $package->description ?: 'No description provided.' }}</div>
-                            <hr class="border-secondary">
-                            @php
-                                $grouped = $package->items->groupBy(fn($item) => $item->category->name ?? 'Uncategorized');
-                            @endphp
+                    <div>
+                        <strong>Description:</strong>
+                        <span class="text-light">{{ $package->description ?: 'No description provided.' }}</span>
+                    </div>
+                </div>
 
-                            @foreach($grouped as $categoryName => $items)
-                                <div class="mb-3">
-                                    <h6 class="text-warning">{{ $categoryName }}</h6>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm table-dark table-bordered border-secondary mb-0">
-                                            <thead>
-                                                <tr>
-                                                    <th>Item</th>
-                                                    <th>Quantity</th>
-                                                    <th>Price (each)</th>
-                                                    <th>Subtotal</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach($items as $item)
-                                                    <tr>
-                                                        <td>{{ $item->name }}</td>
-                                                        <td>{{ $item->pivot->quantity ?? 1 }}</td>
-                                                        <td>₱{{ number_format($item->selling_price, 2) }}</td>
-                                                        <td>₱{{ number_format(($item->selling_price * ($item->pivot->quantity ?? 1)), 2) }}</td>
-                                                    </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
+                <hr class="border-secondary">
+
+                {{-- Consumable Items --}}
+                @php
+                    $grouped = $package->items->groupBy(fn($item) => $item->category->name ?? 'Uncategorized');
+                @endphp
+
+                @foreach($grouped as $categoryName => $items)
+                    <div class="mb-3">
+                        <h6 class="text-warning fw-semibold mb-2 d-flex align-items-center gap-2">
+                            <i class="bi bi-tag"></i>
+                            {{ $categoryName }}
+                        </h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-dark table-bordered border-secondary mb-0 align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Quantity</th>
+                                        <th>Price (each)</th>
+                                        <th>Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($items as $item)
+                                        <tr>
+                                            <td class="d-flex align-items-center gap-2">
+                                                {{-- Item image, if exists --}}
+                                                @if($item->image)
+                                                    <img src="{{ asset('storage/'.$item->image) }}"
+                                                         alt="Item Image"
+                                                         class="rounded"
+                                                         style="height: 28px; width: 28px; object-fit: cover; cursor:pointer;"
+                                                         onclick="enlargeImage(this)">
+                                                @endif
+                                                <span>{{ $item->name }}</span>
+                                            </td>
+                                            <td>{{ $item->pivot->quantity ?? 1 }}</td>
+                                            <td>₱{{ number_format($item->selling_price, 2) }}</td>
+                                            <td>₱{{ number_format(($item->selling_price * ($item->pivot->quantity ?? 1)), 2) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @endforeach
+
+                {{-- Bookable Asset Categories (with category image, if available) --}}
+                @if($package->assetCategories->isNotEmpty())
+                    <div class="mb-2">
+                        <h6 class="text-info fw-semibold mb-2 d-flex align-items-center gap-2">
+                            <i class="bi bi-box"></i>
+                            Bookable Asset Categories
+                        </h6>
+                        <div class="row g-3">
+                            @foreach($package->assetCategories as $assetCategory)
+                                <div class="col-md-6">
+                                    <div class="card bg-secondary bg-opacity-10 border-0 rounded-4 shadow-sm h-100">
+                                        <div class="card-body p-3 d-flex align-items-center gap-3">
+                                            {{-- Asset Category Image/Icon --}}
+                                            @if($assetCategory->inventoryCategory && $assetCategory->inventoryCategory->image)
+                                                <div class="rounded-4 border bg-white bg-opacity-25 d-flex align-items-center justify-content-center"
+                                                     style="height: 150px; width: 150px; cursor:pointer;"
+                                                     onclick="enlargeImage(this.querySelector('img'))">
+                                                    <img src="{{ asset('storage/'.$assetCategory->inventoryCategory->image) }}"
+                                                         alt="Category Image"
+                                                         style="width: 100%; height: 100%; object-fit: cover; border-radius: 1rem;">
+                                                </div>
+                                            @else
+                                                <div class="rounded-4 border bg-secondary bg-opacity-25 d-flex align-items-center justify-content-center"
+                                                     style="height: 150px; width: 150px; border-top-left-radius: 1.5rem; border-top-right-radius: 1.5rem;">
+                                                    <i class="bi bi-folder2-open" style="font-size: 2rem; color: #aab2bd;"></i>
+                                                </div>
+                                            @endif
+                                            <div>
+                                                <div class="fw-semibold text-light mb-1">{{ $assetCategory->inventoryCategory->name ?? 'Unknown' }}</div>
+                                                <div class="text-info small">
+                                                    ₱{{ number_format($assetCategory->price, 2) }}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             @endforeach
-                            <hr class="border-secondary">
-                            <div class="fs-5 text-end">
-                                <strong>Total Price:</strong> <span class="text-success">₱{{ number_format($package->total_price, 2) }}</span>
-                            </div>
-                        </div>
-                        <div class="modal-footer border-secondary">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="bi bi-x-lg"></i> Close
-                            </button>
                         </div>
                     </div>
+                @endif
+
+                <hr class="border-secondary mt-4 mb-2">
+                <div class="fs-5 text-end">
+                    <strong>Total Price:</strong>
+                    <span class="text-success">₱{{ number_format($package->total_price, 2) }}</span>
                 </div>
             </div>
-            <!-- End View Modal -->
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg"></i> Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- End View Modal -->
+
+<!-- Reusable Enlarge Image Modal -->
+<div class="modal fade" id="enlargeImageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-0 rounded-4">
+            <div class="modal-body text-center p-0">
+                <img src="" id="enlargeImageTarget" class="img-fluid rounded-4" style="max-height: 70vh; object-fit: contain;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function enlargeImage(img) {
+    const modal = new bootstrap.Modal(document.getElementById('enlargeImageModal'));
+    const target = document.getElementById('enlargeImageTarget');
+    target.src = img.src;
+    modal.show();
+}
+</script>
+
         @endforeach
     </div>
     @endif

@@ -18,7 +18,6 @@ class Booking extends Model
     public const STATUS_DECLINED     = 'declined';
     public const STATUS_CANCELLED    = 'cancelled';
     public const STATUS_FOR_INITIAL_REVIEW = 'for_initial_review';    // After Phase 3, waiting for parlor to set fees
-    public const STATUS_FOR_FINAL_REVIEW = 'for_final_review';        // After Phase 4, waiting for parlor’s approval
 
     protected $fillable = [
         'client_user_id',
@@ -122,5 +121,9 @@ public function customizationRequests()
         return $this->hasMany(AssetReservation::class, 'booking_id');
     }
 
+public function bookingAgent()
+{
+    return $this->hasOne(\App\Models\BookingAgent::class, 'booking_id');
+}
 
 }

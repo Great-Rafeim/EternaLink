@@ -18,4 +18,11 @@ class BookingAgent extends Model
     {
         return $this->belongsTo(Booking::class);
     }
+
+    // BookingAgent.php (model for booking_agents table)
+public function agentUser()
+{
+    return $this->belongsTo(\App\Models\User::class, 'agent_user_id');
+}
+
 }

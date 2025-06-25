@@ -9,24 +9,48 @@
                             {{ isset($item) ? 'Edit' : 'Add' }} Inventory Item
                         </h2>
                         <form method="POST"
-                              action="{{ isset($item) ? route('funeral.items.update', $item) : route('funeral.items.store') }}">
+                              action="{{ isset($item) ? route('funeral.items.update', $item) : route('funeral.items.store') }}" enctype="multipart/form-data">
                             @csrf
                             @if(isset($item)) @method('PUT') @endif
 
                             <div class="mb-3">
-                                <label class="form-label">Item Name</label>
+                                <label class="form-label">Item Name <span class="text-danger">*</span></label>
                                 <input type="text" name="name" value="{{ old('name', $item->name ?? '') }}"
-                                       class="form-control bg-secondary border-0 text-white" required>
+                                       class="form-control bg-secondary border-0 text-white @error('name') is-invalid @enderror" required>
                                 @error('name') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                             </div>
 
+                            <!-- Item Image Upload -->
                             <div class="mb-3">
-                                <label class="form-label">Category</label>
-                                <select name="inventory_category_id" id="categorySelect" class="form-select bg-secondary border-0 text-white">
+                                <label class="form-label text-white">Item Image (optional)</label>
+                                <input type="file" name="image" class="form-control bg-dark text-white border-secondary" accept="image/*" onchange="previewImage(event)">
+                                <div class="mt-2" id="image-preview">
+                                    @if(old('remove_image') == "1")
+                                        <div class="text-muted">No image selected.</div>
+                                    @elseif(isset($item) && $item->image && !old('image'))
+                                        <img src="{{ asset('storage/' . $item->image) }}" alt="Current Image" class="img-thumbnail mb-2" style="max-height:120px;">
+                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeCurrentImage()">Remove Image</button>
+                                    @else
+                                        <div class="text-muted">No image selected.</div>
+                                    @endif
+                                    <input type="hidden" name="remove_image" id="remove-image-input" value="0">
+                                </div>
+                                @error('image') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Category <span class="text-danger">*</span></label>
+                                <select name="inventory_category_id" id="categorySelect"
+                                        class="form-select bg-secondary border-0 text-white @error('inventory_category_id') is-invalid @enderror">
+                                    <option value="">Select category</option>
                                     @foreach($categories as $category)
                                         <option value="{{ $category->id }}"
+                                            data-is-asset="{{ $category->is_asset }}"
                                             {{ old('inventory_category_id', $item->inventory_category_id ?? '') == $category->id ? 'selected' : '' }}>
                                             {{ $category->name }}
+                                            @if($category->is_asset)
+                                                [Asset: {{ ucfirst($category->reservation_mode) }}]
+                                            @endif
                                         </option>
                                     @endforeach
                                 </select>
@@ -42,15 +66,15 @@
 
                             <div class="row">
                                 <div class="col-md-6 mb-3" id="quantityRow">
-                                    <label class="form-label">Quantity</label>
+                                    <label class="form-label">Quantity <span class="text-danger">*</span></label>
                                     <input type="number" name="quantity" min="0" value="{{ old('quantity', $item->quantity ?? 0) }}"
-                                           class="form-control bg-secondary border-0 text-white">
+                                           class="form-control bg-secondary border-0 text-white @error('quantity') is-invalid @enderror">
                                     @error('quantity') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label">Status</label>
-                                    <select name="status" class="form-select bg-secondary border-0 text-white">
-                                        @foreach(['available', 'in_use', 'maintenance'] as $status)
+                                    <label class="form-label">Status <span class="text-danger">*</span></label>
+                                    <select name="status" class="form-select bg-secondary border-0 text-white @error('status') is-invalid @enderror">
+                                        @foreach(['available', 'in_use', 'maintenance', 'reserved'] as $status)
                                             <option value="{{ $status }}"
                                                 {{ old('status', $item->status ?? '') == $status ? 'selected' : '' }}>
                                                 {{ ucfirst(str_replace('_', ' ', $status)) }}
@@ -93,7 +117,7 @@
                             </div>
 
                             <div class="row align-items-center mb-3">
-                                <!-- Shareable Toggle -->
+                                <!-- Shareable Toggle (Always show for asset/consumable) -->
                                 <div class="col-md-6" id="shareableRow">
                                     <div class="form-check form-switch">
                                         <input class="form-check-input bg-secondary border-0" type="checkbox" name="shareable" value="1"
@@ -101,9 +125,11 @@
                                             {{ old('shareable', $item->shareable ?? false) ? 'checked' : '' }}>
                                         <label class="form-check-label text-white" for="shareableSwitch">Mark as shareable</label>
                                     </div>
+                                    <div class="form-text text-info">
+                                        <span id="shareableHint"></span>
+                                    </div>
                                 </div>
-
-                                <!-- Shareable Quantity (show if checked or previously marked as shareable) -->
+                                <!-- Shareable Quantity (only for consumables, hidden for assets) -->
                                 <div class="col-md-6" id="shareableQtyRow"
                                     style="{{ old('shareable', $item->shareable ?? false) ? '' : 'display:none;' }}">
                                     <label for="shareable_quantity" class="form-label text-white">Shareable Quantity</label>
@@ -129,8 +155,8 @@
     </div>
 
     <script>
-        // Pass the map of category id => is_asset
         window.categoryAssetMap = @json($categories->pluck('is_asset', 'id'));
+        window.categoryReservationModeMap = @json($categories->pluck('reservation_mode', 'id'));
 
         function toggleFieldsForCategory() {
             var select = document.getElementById('categorySelect');
@@ -141,38 +167,46 @@
             document.getElementById('quantityRow').style.display = isAsset ? 'none' : '';
             document.getElementById('lowStockRow').style.display = isAsset ? 'none' : '';
             document.getElementById('expiryRow').style.display = isAsset ? 'none' : '';
-            document.getElementById('shareableRow').style.display = isAsset ? 'none' : '';
-            document.getElementById('shareableQtyRow').style.display = isAsset ? 'none' : '';
+            document.getElementById('shareableQtyRow').style.display = !isAsset && document.getElementById('shareableSwitch').checked ? '' : 'none';
 
-            // Reset values if asset
+            // Show shareable toggle always
+            document.getElementById('shareableRow').style.display = '';
+
+            // Hint text for assets
+            var hint = '';
             if (isAsset) {
-                if(document.querySelector('input[name="quantity"]')) {
-                    document.querySelector('input[name="quantity"]').value = 1;
+                hint = "Bookable asset: If marked as shareable, this asset can be reserved by partner parlors.";
+            } else {
+                hint = "Consumable: Shareable means other parlors can request some of your stock.";
+            }
+            document.getElementById('shareableHint').innerText = hint;
+
+            // Reset hidden fields for assets
+            if (isAsset) {
+                if(document.querySelector('input[name=\"quantity\"]')) {
+                    document.querySelector('input[name=\"quantity\"]').value = 1;
                 }
-                if(document.querySelector('input[name="low_stock_threshold"]')) {
-                    document.querySelector('input[name="low_stock_threshold"]').value = '';
+                if(document.querySelector('input[name=\"low_stock_threshold\"]')) {
+                    document.querySelector('input[name=\"low_stock_threshold\"]').value = '';
                 }
-                if(document.querySelector('input[name="expiry_date"]')) {
-                    document.querySelector('input[name="expiry_date"]').value = '';
+                if(document.querySelector('input[name=\"expiry_date\"]')) {
+                    document.querySelector('input[name=\"expiry_date\"]').value = '';
                 }
-                if(document.querySelector('input[name="shareable"]')) {
-                    document.querySelector('input[name="shareable"]').checked = false;
-                }
-                if(document.querySelector('input[name="shareable_quantity"]')) {
-                    document.querySelector('input[name="shareable_quantity"]').value = '';
+                if(document.querySelector('input[name=\"shareable_quantity\"]')) {
+                    document.querySelector('input[name=\"shareable_quantity\"]').value = '';
                 }
             }
         }
 
-        // Show/hide shareable quantity row for non-asset consumables
         function toggleShareableQty() {
+            var select = document.getElementById('categorySelect');
+            var selectedCategoryId = select.value;
+            var isAsset = window.categoryAssetMap[selectedCategoryId] == 1;
+
             var shareableCheckbox = document.getElementById('shareableSwitch');
             var qtyGroup = document.getElementById('shareableQtyRow');
-            // Only show if checkbox is checked AND the shareable row is not hidden
-            qtyGroup.style.display =
-                shareableCheckbox && shareableCheckbox.checked && document.getElementById('shareableRow').style.display !== 'none'
-                ? ''
-                : 'none';
+            // Show only for consumables and if shareable is checked
+            qtyGroup.style.display = !isAsset && shareableCheckbox && shareableCheckbox.checked ? '' : 'none';
         }
 
         document.getElementById('categorySelect').addEventListener('change', function() {
@@ -189,4 +223,44 @@
             toggleShareableQty();
         });
     </script>
+
+
+<script>
+        // --- IMAGE PREVIEW + REMOVE LOGIC ---
+        function previewImage(event) {
+            let preview = document.getElementById('image-preview');
+            preview.innerHTML = "";
+            if (event.target.files && event.target.files[0]) {
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    let img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = "img-thumbnail mb-2";
+                    img.style.maxHeight = "120px";
+                    preview.appendChild(img);
+
+                    let btn = document.createElement('button');
+                    btn.type = "button";
+                    btn.className = "btn btn-outline-danger btn-sm ms-2";
+                    btn.innerHTML = "Remove Image";
+                    btn.onclick = function() {
+                        document.querySelector('input[type=file][name=image]').value = "";
+                        preview.innerHTML = '<div class="text-muted">No image selected.</div>';
+                        document.getElementById('remove-image-input').value = "1";
+                    };
+                    preview.appendChild(btn);
+                }
+                reader.readAsDataURL(event.target.files[0]);
+                document.getElementById('remove-image-input').value = "0";
+            }
+        }
+
+        // Remove image if "Remove Image" button (prefilled) is clicked
+        function removeCurrentImage() {
+            let preview = document.getElementById('image-preview');
+            preview.innerHTML = '<div class="text-muted">No image selected.</div>';
+            document.querySelector('input[type="file"][name="image"]').value = "";
+            document.getElementById('remove-image-input').value = "1";
+        }
+</script>
 </x-layouts.funeral>

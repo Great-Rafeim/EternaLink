@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ResourceRequest extends Model
 {
-    // Mass assignable fields (make sure these match your migration)
+    // Mass assignable fields - must match your latest migration
     protected $fillable = [
         'requester_id',
         'provider_id',
@@ -15,6 +15,9 @@ class ResourceRequest extends Model
         'quantity',
         'purpose',
         'preferred_date',
+        'reserved_start',     // NEW
+        'reserved_end',       // NEW
+        'asset_reservation_id', // NEW
         'delivery_method',
         'notes',
         'contact_name',
@@ -24,7 +27,7 @@ class ResourceRequest extends Model
         'status',
     ];
 
-    // Relationships (optional but recommended for easy data access)
+    // Relationships (recommended)
     public function requester()
     {
         return $this->belongsTo(User::class, 'requester_id');
@@ -43,5 +46,16 @@ class ResourceRequest extends Model
     public function providerItem()
     {
         return $this->belongsTo(InventoryItem::class, 'provider_item_id');
+    }
+
+    // If asset_reservation_id is in resource_requests table
+    public function assetReservation()
+    {
+        return $this->belongsTo(AssetReservation::class, 'asset_reservation_id');
+    }
+    // If you want to also allow reverse lookup from AssetReservation:
+    // (in AssetReservation model)
+    public function resourceRequest() {
+         return $this->hasOne(ResourceRequest::class, 'asset_reservation_id');
     }
 }

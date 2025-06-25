@@ -6,51 +6,40 @@ use Illuminate\Http\Request;
 use App\Models\ServicePackage;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
+use App\Models\PackageAssetCategory;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB; 
 
-
 class PackageController extends Controller
 {
-
     public function index()
     {
-        // Fetch packages for the logged-in funeral home
-        $packages = \App\Models\ServicePackage::where('funeral_home_id', auth()->id())->get();
-
+        $packages = ServicePackage::where('funeral_home_id', auth()->id())->get();
         return view('funeral.packages.index', compact('packages'));
     }
 
     public static function updatePackagesWithItem($itemId)
-{
-    // Find all service packages that use this item
-    $packageIds = DB::table('inventory_item_service_package')
-        ->where('inventory_item_id', $itemId)
-        ->pluck('service_package_id');
+    {
+        $packageIds = DB::table('service_package_components')
+            ->where('inventory_item_id', $itemId)
+            ->pluck('service_package_id');
 
-    foreach ($packageIds as $packageId) {
-        $package = ServicePackage::with('items')->find($packageId);
-        if ($package) {
-            $newTotal = $package->items->sum(function ($item) {
-                return ($item->selling_price ?? 0) * ($item->pivot->quantity ?? 1);
-            });
-            $package->update(['total_price' => $newTotal]);
+        foreach ($packageIds as $packageId) {
+            $package = ServicePackage::with('items')->find($packageId);
+            if ($package) {
+                $newTotal = $package->items->sum(function ($item) {
+                    return ($item->selling_price ?? 0) * ($item->pivot->quantity ?? 1);
+                });
+                $package->update(['total_price' => $newTotal]);
+            }
         }
     }
-}
-
 
     public function create()
     {
         $funeralHomeId = auth()->id();
-
-        // Fetch only categories owned by this funeral home
         $categories = InventoryCategory::where('funeral_home_id', $funeralHomeId)->get();
-
-        // Fetch only items owned by this funeral home
-        $items = InventoryItem::where('status', 'available')
-            ->where('funeral_home_id', $funeralHomeId)
-            ->get();
+        $items = InventoryItem::where('status', 'available')->where('funeral_home_id', $funeralHomeId)->get();
 
         $itemsByCategory = [];
         foreach ($categories as $category) {
@@ -65,36 +54,65 @@ class PackageController extends Controller
                 })->values()->toArray();
         }
 
-        return view('funeral.packages.create', compact('categories', 'itemsByCategory'));
+        // For easy JS asset selection: only bookable categories
+        $assetCategories = $categories->where('is_asset', true)->values();
+
+        return view('funeral.packages.create', compact('categories', 'itemsByCategory', 'assetCategories'));
     }
 
-   public function store(Request $request)
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'items' => ['required', 'array'],
-            'image' => ['nullable', 'image', 'max:20480'], // add validation rule for image
+            'items' => ['nullable', 'array'],
+            'assets' => ['nullable', 'array'],
+            'image' => ['nullable', 'image', 'max:20480'],
         ]);
 
-        $items = $request->input('items');
         $totalPrice = 0;
-        $packageItemsData = [];
+        $packageItemData = [];
+        $assetCategoryData = [];
 
-        foreach ($items as $catId => $catItems) {
-            foreach ($catItems as $itemData) {
-                $item = InventoryItem::findOrFail($itemData['id']);
-                $qty = max(1, intval($itemData['quantity']));
-                $price = $item->selling_price * $qty;
-                $totalPrice += $price;
-                $packageItemsData[] = [
-                    'inventory_item_id' => $item->id,
-                    'quantity' => $qty,
-                ];
+        // --- DEBUG: Log raw input
+        \Log::info('PACKAGE_DEBUG - assets from request', ['assets' => $request->input('assets')]);
+        \Log::info('PACKAGE_DEBUG - items from request', ['items' => $request->input('items')]);
+
+        // Items (consumables)
+        if ($request->filled('items')) {
+            foreach ($request->input('items', []) as $catId => $catItems) {
+                foreach ($catItems as $itemData) {
+                    $item = InventoryItem::findOrFail($itemData['id']);
+                    $qty = max(1, intval($itemData['quantity']));
+                    $price = $item->selling_price * $qty;
+                    $totalPrice += $price;
+                    $packageItemData[] = [
+                        'inventory_item_id' => $item->id,
+                        'quantity' => $qty,
+                    ];
+                }
             }
         }
 
-        // Prepare the data to save
+        // Bookable Asset Categories: each must have a category_id and price
+        if ($request->filled('assets')) {
+            foreach ($request->input('assets', []) as $asset) {
+                \Log::info('PACKAGE_DEBUG - inspecting asset in loop', ['asset' => $asset]);
+                if (!empty($asset['category_id']) && is_numeric($asset['price'])) {
+                    $totalPrice += floatval($asset['price']);
+                    $assetCategoryData[] = [
+                        'inventory_category_id' => $asset['category_id'],
+                        'price' => floatval($asset['price']),
+                    ];
+                }
+            }
+        }
+
+        // --- DEBUG: Log processed asset category data
+        \Log::info('PACKAGE_DEBUG - assetCategoryData parsed', ['assetCategoryData' => $assetCategoryData]);
+        \Log::info('PACKAGE_DEBUG - packageItemData parsed', ['packageItemData' => $packageItemData]);
+        \Log::info('PACKAGE_DEBUG - totalPrice', ['totalPrice' => $totalPrice]);
+
         $packageData = [
             'funeral_home_id' => auth()->id(),
             'name' => $request->name,
@@ -110,30 +128,48 @@ class PackageController extends Controller
         try {
             $package = ServicePackage::create($packageData);
 
-            foreach ($packageItemsData as $data) {
-                $package->items()->attach($data['inventory_item_id'], ['quantity' => $data['quantity']]);
+            // Attach consumable items (pivot)
+            foreach ($packageItemData as $data) {
+                $package->items()->attach($data['inventory_item_id'], [
+                    'quantity' => $data['quantity'],
+                ]);
+            }
+
+            // Attach asset categories (new table)
+            foreach ($assetCategoryData as $data) {
+                \Log::info('PACKAGE_DEBUG - inserting asset category row', [
+                    'service_package_id' => $package->id,
+                    'inventory_category_id' => $data['inventory_category_id'],
+                    'price' => $data['price'],
+                ]);
+                PackageAssetCategory::create([
+                    'service_package_id' => $package->id,
+                    'inventory_category_id' => $data['inventory_category_id'],
+                    'price' => $data['price'],
+                ]);
             }
 
             DB::commit();
         } catch (\Throwable $e) {
             DB::rollBack();
+            \Log::error('PACKAGE_DEBUG - failed to create package', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return back()->withErrors(['error' => 'Failed to create package: ' . $e->getMessage()]);
         }
 
-        return redirect()->route('funeral.packages.index')
-            ->with('success', 'Package created successfully!');
+        return redirect()->route('funeral.packages.index')->with('success', 'Package created successfully!');
     }
 
     public function edit($id)
     {
         $funeralHomeId = auth()->id();
-
-        $package = ServicePackage::with(['items.category'])
+        $package = ServicePackage::with(['items.category', 'assetCategories.inventoryCategory'])
             ->where('funeral_home_id', $funeralHomeId)
             ->findOrFail($id);
 
         $categories = InventoryCategory::where('funeral_home_id', $funeralHomeId)->get();
-
         $items = InventoryItem::where('status', 'available')
             ->where('funeral_home_id', $funeralHomeId)
             ->get();
@@ -149,6 +185,7 @@ class PackageController extends Controller
                 ])->values()->toArray();
         }
 
+        // For JS: prefill selections
         $currentSelection = [];
         foreach ($package->items as $item) {
             $catId = $item->category->id ?? null;
@@ -160,78 +197,115 @@ class PackageController extends Controller
                 'quantity' => $item->pivot->quantity ?? 1,
             ];
         }
+        // Prefill assets: [{category_id, price}]
+        $currentAssets = $package->assetCategories->map(function($pac) {
+            return [
+                'category_id' => $pac->inventory_category_id,
+                'price' => $pac->price,
+            ];
+        })->toArray();
 
-        return view('funeral.packages.edit', compact('package', 'categories', 'itemsByCategory', 'currentSelection'));
+        $assetCategories = $categories->where('is_asset', true)->values();
+
+        return view('funeral.packages.edit', compact('package', 'categories', 'itemsByCategory', 'currentSelection', 'currentAssets', 'assetCategories'));
     }
-
 
     public function update(Request $request, $id)
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'items' => ['required', 'array'],
-            'image' => ['nullable', 'image', 'max:20480'], // max ~20MB
+            'items' => ['nullable', 'array'],
+            'assets' => ['nullable', 'array'],
+            'image' => ['nullable', 'image', 'max:20480'],
         ]);
 
         $package = ServicePackage::where('funeral_home_id', auth()->id())->findOrFail($id);
 
-        $items = $request->input('items');
         $totalPrice = 0;
         $syncData = [];
+        $assetCategoryData = [];
 
-        foreach ($items as $catId => $catItems) {
-            foreach ($catItems as $itemData) {
-                $item = InventoryItem::findOrFail($itemData['id']);
-                $qty = max(1, intval($itemData['quantity']));
-                $totalPrice += $item->selling_price * $qty;
-                $syncData[$item->id] = ['quantity' => $qty];
+        // Items
+        if ($request->filled('items')) {
+            foreach ($request->input('items', []) as $catId => $catItems) {
+                foreach ($catItems as $itemData) {
+                    $item = InventoryItem::findOrFail($itemData['id']);
+                    $qty = max(1, intval($itemData['quantity']));
+                    $totalPrice += $item->selling_price * $qty;
+                    $syncData[$item->id] = ['quantity' => $qty];
+                }
             }
         }
 
-        // Build the update data
+        // Asset categories
+        if ($request->filled('assets')) {
+            foreach ($request->input('assets', []) as $asset) {
+                if (!empty($asset['category_id']) && is_numeric($asset['price'])) {
+                    $totalPrice += floatval($asset['price']);
+                    $assetCategoryData[] = [
+                        'inventory_category_id' => $asset['category_id'],
+                        'price' => floatval($asset['price']),
+                    ];
+                }
+            }
+        }
+
         $updateData = [
             'name' => $request->name,
             'description' => $request->description,
             'total_price' => $totalPrice,
         ];
 
-        // Handle "remove image" (from Remove Image button, sets hidden remove_image field to "1")
         if ($request->input('remove_image') == "1" && $package->image) {
             \Storage::disk('public')->delete($package->image);
             $updateData['image'] = null;
         }
 
-        // Handle new image upload (replaces old image)
         if ($request->hasFile('image')) {
-            // Delete old image if any
             if ($package->image) {
                 \Storage::disk('public')->delete($package->image);
             }
             $updateData['image'] = $request->file('image')->store('service_packages', 'public');
         }
 
-        $package->update($updateData);
+        DB::beginTransaction();
+        try {
+            $package->update($updateData);
+            $package->items()->sync($syncData);
 
-        $package->items()->sync($syncData);
+            // Remove all old asset category prices
+            PackageAssetCategory::where('service_package_id', $package->id)->delete();
+
+            // Insert new asset category prices
+            foreach ($assetCategoryData as $data) {
+                PackageAssetCategory::create([
+                    'service_package_id' => $package->id,
+                    'inventory_category_id' => $data['inventory_category_id'],
+                    'price' => $data['price'],
+                ]);
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => 'Failed to update package: ' . $e->getMessage()]);
+        }
 
         return redirect()->route('funeral.packages.index')->with('success', 'Package updated successfully!');
     }
 
-public function destroy($id)
-{
-    $package = \App\Models\ServicePackage::where('funeral_home_id', auth()->id())->findOrFail($id);
+    public function destroy($id)
+    {
+        $package = ServicePackage::where('funeral_home_id', auth()->id())->findOrFail($id);
 
-    // Optional: detach all related items (not required if set up for cascade delete)
-    $package->items()->detach();
+        $package->items()->detach();
+        // Remove related asset categories (cleanup)
+        PackageAssetCategory::where('service_package_id', $package->id)->delete();
 
-    $package->delete();
+        $package->delete();
 
-    return redirect()->route('funeral.packages.index')
-        ->with('success', 'Package deleted successfully!');
+        return redirect()->route('funeral.packages.index')
+            ->with('success', 'Package deleted successfully!');
+    }
 }
-
-
-
-}
-

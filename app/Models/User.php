@@ -59,7 +59,10 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
         ];
     }
-
+public function isFuneralStaff()
+{
+    return in_array($this->role, ['funeral']);
+}
     public function logins()
     {
         return $this->hasMany(\App\Models\Login::class);

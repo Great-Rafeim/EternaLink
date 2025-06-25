@@ -21,7 +21,16 @@ class FuneralDashboardController extends Controller
         $user = auth()->user();
         $userId = $user->id;
 
+        // Eager load the assigned agent for each booking
+        $bookings = Booking::with([
+            'bookingAgent.agentUser', // Make sure relationships exist!
+        ])
+        ->where('funeral_home_id', $userId)
+        ->orderByDesc('created_at')
+        ->paginate(10);
+
         return view('funeral.dashboard', [
+            'bookings' => $bookings,
             'totalItems' => InventoryItem::where('funeral_home_id', $userId)->count(),
             'lowStockCount' => InventoryItem::where('funeral_home_id', $userId)
                 ->whereColumn('quantity', '<=', 'low_stock_threshold')
@@ -107,14 +116,74 @@ $customizationRequests = Booking::with(['client', 'package', 'customizationReque
         ));
     }
 
-    // 3. SHOW SINGLE BOOKING (optional)
-    public function show(Booking $booking)
-    {
-        $this->authorizeBooking($booking);
+public function show(Booking $booking)
+{
+    $this->authorizeBooking($booking);
 
-        return view('funeral.bookings.show', compact('booking'));
+    $booking->load([
+        'package.items.category',
+        'client',
+        'funeralHome',
+        'agent',
+        'bookingAgent.agentUser', // make sure relationship exists
+    ]);
+
+    $packageItems = $booking->package->items->map(function($item) {
+        return [
+            'item'       => $item->name,
+            'category'   => $item->category->name ?? '-',
+            'brand'      => $item->brand ?? '-',
+            'quantity'   => $item->pivot->quantity ?? 1,
+            'category_id'=> $item->category->id ?? null,
+            'is_asset'   => ($item->category->is_asset ?? false) ? true : false,
+        ];
+    })->toArray();
+
+    $assetCategories = \DB::table('package_asset_categories')
+        ->join('inventory_categories', 'package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
+        ->where('package_asset_categories.service_package_id', $booking->package->id)
+        ->where('inventory_categories.is_asset', 1)
+        ->select('inventory_categories.id', 'inventory_categories.name')
+        ->get();
+
+    // Available agents: Must belong to this parlor, be active, and not be assigned to another booking
+    $assignedAgentIds = \DB::table('booking_agents')
+        ->whereNotNull('agent_user_id')
+        ->pluck('agent_user_id')
+        ->toArray();
+
+    $parlorAgents = \DB::table('users')
+        ->join('funeral_home_agent', function ($join) use ($booking) {
+            $join->on('users.id', '=', 'funeral_home_agent.agent_user_id')
+                ->where('funeral_home_agent.funeral_user_id', $booking->funeral_home_id)
+                ->where('funeral_home_agent.status', 'active');
+        })
+        ->where('users.role', 'agent')
+        ->whereNull('users.deleted_at')
+        ->whereNotIn('users.id', $assignedAgentIds) // Only show unassigned
+        ->select('users.id', 'users.name', 'users.email')
+        ->get();
+
+    $invitationStatus = null;
+    $bookingAgent = $booking->bookingAgent;
+    if ($bookingAgent && $bookingAgent->client_agent_email) {
+        $invitation = \DB::table('agent_client_requests')
+            ->where('client_id', $booking->client_user_id)
+            ->where('booking_id', $booking->id)
+            ->orderByDesc('requested_at')
+            ->first();
+        $invitationStatus = $invitation ? $invitation->status : null;
     }
 
+    return view('funeral.bookings.show', compact(
+        'booking',
+        'packageItems',
+        'assetCategories',
+        'parlorAgents',
+        'invitationStatus',
+        'bookingAgent'
+    ));
+}
 
 
 public function approve(Request $request, Booking $booking)
@@ -132,75 +201,43 @@ public function approve(Request $request, Booking $booking)
 
     try {
         DB::transaction(function () use ($booking, $newStatus) {
-            // ---- Determine Reservation Window ----
-            $detail = $booking->detail;
-            $start = now();
-            $end = now()->addDays(3);
-
-            if ($detail && $detail->wake_start_date) {
-                $start = \Carbon\Carbon::parse($detail->wake_start_date)->startOfDay();
-                if (!empty($detail->burial_date)) {
-                    $end = \Carbon\Carbon::parse($detail->burial_date)->endOfDay();
-                } elseif (!empty($detail->wake_end_date)) {
-                    $end = \Carbon\Carbon::parse($detail->wake_end_date)->endOfDay();
-                }
-            }
-
-            // ---- Collect Items: customized or standard ----
+            // Only get real inventory items (consumables) to deduct
             $items = $booking->customized_package_id && $booking->customizedPackage
                 ? $booking->customizedPackage->items
                 : $booking->package->items;
 
             foreach ($items as $item) {
-                $invItem = $item->inventoryItem ?? $item;
-                $qtyToDeduct = $item->quantity ?? ($item->pivot->quantity ?? 1);
+                // Try to resolve to actual InventoryItem model
+                $invItem = null;
+                $category = null;
+                $qtyToDeduct = 1;
 
-                // Always eager load category
-                $category = $invItem->category ?? $invItem->load('category')->category;
-
-                // --- Bookable Asset Handling ---
-                if ($category && $category->is_asset) {
-                    // Check reservation conflict
-                    $conflict = \App\Models\AssetReservation::where('inventory_item_id', $invItem->id)
-                        ->where('status', '!=', 'cancelled')
-                        ->where(function ($q) use ($start, $end) {
-                            $q->whereBetween('reserved_start', [$start, $end])
-                                ->orWhereBetween('reserved_end', [$start, $end])
-                                ->orWhere(function($sub) use ($start, $end) {
-                                    $sub->where('reserved_start', '<=', $start)
-                                        ->where('reserved_end', '>=', $end);
-                                });
-                        })
-                        ->exists();
-
-                    if ($conflict) {
-                        throw new \Exception("Asset '{$invItem->name}' is already reserved for another booking during this period.");
-                    }
-
-                    // Create asset reservation
-                    \App\Models\AssetReservation::create([
-                        'inventory_item_id' => $invItem->id,
-                        'booking_id'        => $booking->id,
-                        'reserved_start'    => $start,
-                        'reserved_end'      => $end,
-                        'status'            => 'reserved',
-                        'created_by'        => auth()->id(),
-                    ]);
-
-                    // Mark asset as reserved
-                    $invItem->status = 'reserved';
-                    $invItem->save();
-
-                    continue; // Asset: Do not deduct quantity
+                // Customized package item case
+                if (isset($item->inventoryItem) && $item->inventoryItem) {
+                    $invItem = $item->inventoryItem;
+                    $qtyToDeduct = $item->quantity ?? 1;
+                }
+                // Normal package item case
+                elseif ($item instanceof \App\Models\InventoryItem) {
+                    $invItem = $item;
+                    $qtyToDeduct = $item->pivot->quantity ?? 1;
                 }
 
-                // --- Consumable/Shareable Handling ---
-                if ($invItem->quantity < $qtyToDeduct) {
+                if (!$invItem) continue; // Safety: skip if not found
+
+                // Get category and check consumable (not asset)
+                $category = $invItem->category ?? $invItem->load('category')->category;
+                if (!$category || $category->is_asset) {
+                    continue; // Not a consumable, skip
+                }
+
+                // Defensive: Don't over-deduct, must be positive and not null
+                if ($invItem->quantity === null || $invItem->quantity < $qtyToDeduct) {
                     throw new \Exception("Not enough stock for '{$invItem->name}'. Available: {$invItem->quantity}, Required: $qtyToDeduct");
                 }
 
-                // Deduct main quantity
-                $invItem->quantity -= $qtyToDeduct;
+                // Deduct only for valid inventory items
+                $invItem->quantity = max(0, $invItem->quantity - $qtyToDeduct);
 
                 // Deduct shareable if enabled and present
                 if ($invItem->shareable && !is_null($invItem->shareable_quantity) && $invItem->shareable_quantity > 0) {
@@ -223,26 +260,14 @@ public function approve(Request $request, Booking $booking)
         ? "Your booking for <b>{$booking->package->name}</b> has been <b>PRE-APPROVED</b>. Please proceed with filling out the required information."
         : "Your booking for <b>{$booking->package->name}</b> has been <b>APPROVED</b> and is now ready to start.";
 
-    // Always prepare the asset list (so it's available for notification, even if status is not APPROVED yet)
-    $assets = $booking->customized_package_id && $booking->customizedPackage
-        ? $booking->customizedPackage->items->filter(fn($i) => ($i->inventoryItem?->category?->is_asset ?? false))
-        : $booking->package->items->filter(fn($i) => ($i->category?->is_asset ?? false));
-
-    if ($newStatus === Booking::STATUS_APPROVED && $assets->count()) {
-        $assetDetails = $assets->map(function($i) {
-            $inv = $i->inventoryItem ?? $i;
-            $catName = $inv->category && $inv->category->name ? $inv->category->name : 'Asset';
-            return "- " . ($inv->name ?? 'Unknown') . " ({$catName})";
-        })->implode('<br>');
-        $msg .= "<br><b>Reserved Asset(s):</b><br>" . $assetDetails;
-    }
-
     if ($booking->client) $booking->client->notify(new BookingStatusChanged($booking, $msg));
     if ($booking->agent) $booking->agent->notify(new BookingStatusChanged($booking, $msg));
 
     return redirect()->route('funeral.bookings.index')
-        ->with('success', 'Booking approved, inventory updated, and assets reserved.');
+        ->with('success', 'Booking approved, consumable inventory updated.');
 }
+
+
     // 5. DENY BOOKING
     public function deny(Request $request, Booking $booking)
     {
@@ -312,7 +337,12 @@ public function reject($bookingId)
 }
 
 
-
+public function manageService(Booking $booking)
+{
+    // Optionally: authorize
+    // $this->authorize('manage', $booking);
+    return view('funeral.bookings.manage-service', compact('booking'));
+}
     // FINAL APPROVAL: submitted ➔ approved
     public function finalApprove(Request $request, Booking $booking)
     {
@@ -337,19 +367,26 @@ public function reject($bookingId)
         return redirect()->route('funeral.bookings.index')->with('success', 'Booking fully approved and ready to start.');
     }
 
-        // START SERVICE: approved ➔ ongoing
-    public function startService(Request $request, Booking $booking)
+            // START SERVICE: approved ➔ ongoing
+    public function startService(Booking $booking)
     {
-        $this->authorizeBooking($booking);
-
+        // Only allow if currently approved
         if ($booking->status !== Booking::STATUS_APPROVED) {
-            return back()->with('error', 'Booking is not yet ready to start service.');
+            return back()->with('error', 'Service can only be started from approved bookings.');
         }
 
         $booking->status = Booking::STATUS_ONGOING;
         $booking->save();
 
-        return back()->with('success', 'Service started.');
+        // Optionally: Send notification
+        if ($booking->client) {
+            $booking->client->notify(new BookingStatusChanged($booking, "The funeral service for <b>{$booking->package->name}</b> has <b>STARTED</b>."));
+        }
+        if ($booking->agent) {
+            $booking->agent->notify(new BookingStatusChanged($booking, "The funeral service for <b>{$booking->package->name}</b> has <b>STARTED</b>."));
+        }
+
+        return back()->with('success', 'Service started. Status is now Ongoing.');
     }
 
     // MARK AS COMPLETED: ongoing ➔ completed
@@ -379,23 +416,36 @@ public function reject($bookingId)
     }
 
     // Show customization request details
-    public function customizationShow($bookingId, $customizedPackageId)
-    {
-        // Booking with relationship checks for auth
-        $booking = Booking::with(['client', 'package'])
-            ->where('funeral_home_id', auth()->id())
-            ->findOrFail($bookingId);
+public function customizationShow($bookingId, $customizedPackageId)
+{
+    // Booking with relationship checks for auth
+    $booking = Booking::with(['client', 'package'])
+        ->where('funeral_home_id', auth()->id())
+        ->findOrFail($bookingId);
 
-        // Find the specific customization request for this booking
-        $customizedPackage = \App\Models\CustomizedPackage::with([
-                'items.inventoryItem',
-                'items.substituteFor'
-            ])
-            ->where('booking_id', $bookingId)
-            ->findOrFail($customizedPackageId);
+    // Find the specific customization request for this booking
+    $customizedPackage = \App\Models\CustomizedPackage::with([
+            'items.inventoryItem.category',
+            'items.substituteFor'
+        ])
+        ->where('booking_id', $bookingId)
+        ->findOrFail($customizedPackageId);
 
-        return view('funeral.bookings.customization.show', compact('booking', 'customizedPackage'));
-    }
+    // --- Get all bookable asset categories linked to this package ---
+    $assetCategories = \DB::table('package_asset_categories')
+        ->join('inventory_categories', 'package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
+        ->where('package_asset_categories.service_package_id', $booking->package_id)
+        ->where('inventory_categories.is_asset', 1)
+        ->select(
+            'inventory_categories.id',
+            'inventory_categories.name',
+            'inventory_categories.is_asset'
+        )
+        ->get();
+
+    return view('funeral.bookings.customization.show', compact('booking', 'customizedPackage', 'assetCategories'));
+}
+
 
 
 
@@ -531,6 +581,175 @@ public function updatePaymentRemarks(Request $request, Booking $booking)
 }
 
 
+public function updateInfo(Request $request, $bookingId)
+{
+    $booking = Booking::with(['detail', 'package.items', 'customizedPackage', 'client'])->findOrFail($bookingId);
+
+    // Only allow users from this funeral home (or with correct role) to edit
+    // (Assume User has 'funeral_home_id' for matching)
+    if (
+        auth()->user()->role !== 'funeral' ||
+        auth()->user()->id != $booking->funeral_home_id
+    ) {
+        abort(403, 'Unauthorized access');
+    }
+
+
+    // Validation - keep same as client side
+    $validated = $request->validate([
+        // A. Deceased Personal Details
+        'deceased_first_name'        => 'required|string|max:100',
+        'deceased_middle_name'       => 'nullable|string|max:100',
+        'deceased_last_name'         => 'required|string|max:100',
+        'deceased_nickname'          => 'nullable|string|max:100',
+        'deceased_residence'         => 'nullable|string|max:255',
+        'deceased_sex'               => 'required|in:M,F',
+        'deceased_civil_status'      => 'required|string|max:30',
+        'deceased_birthday'          => 'nullable|date',
+        'deceased_age'               => 'nullable|integer',
+        'deceased_date_of_death'     => 'nullable|date',
+        'deceased_religion'          => 'nullable|string|max:50',
+        'deceased_occupation'        => 'nullable|string|max:100',
+        'deceased_citizenship'       => 'nullable|string|max:50',
+        'deceased_time_of_death'     => 'nullable|string|max:30',
+        'deceased_cause_of_death'    => 'nullable|string|max:255',
+        'deceased_place_of_death'    => 'nullable|string|max:255',
+        'deceased_father_first_name' => 'nullable|string|max:100',
+        'deceased_father_middle_name'=> 'nullable|string|max:100',
+        'deceased_father_last_name'  => 'nullable|string|max:100',
+        'deceased_mother_first_name' => 'nullable|string|max:100',
+        'deceased_mother_middle_name'=> 'nullable|string|max:100',
+        'deceased_mother_last_name'  => 'nullable|string|max:100',
+        'corpse_disposal'            => 'nullable|string|max:100',
+        'interment_cremation_date'   => 'nullable|date',
+        'interment_cremation_time'   => 'nullable|string|max:30',
+        'cemetery_or_crematory'      => 'nullable|string|max:255',
+
+        // B. Documents
+        'death_cert_registration_no'     => 'nullable|string|max:100',
+        'death_cert_released_to'         => 'nullable|string|max:100',
+        'death_cert_released_date'       => 'nullable|date',
+        'death_cert_released_signature'  => 'nullable|string',
+        'funeral_contract_no'            => 'nullable|string|max:100',
+        'funeral_contract_released_to'   => 'nullable|string|max:100',
+        'funeral_contract_released_date' => 'nullable|date',
+        'funeral_contract_released_signature'=> 'nullable|string',
+        'official_receipt_no'            => 'nullable|string|max:100',
+        'official_receipt_released_to'   => 'nullable|string|max:100',
+        'official_receipt_released_date' => 'nullable|date',
+        'official_receipt_released_signature'=> 'nullable|string',
+
+        // C. Informant Details
+        'informant_name'             => 'nullable|string|max:100',
+        'informant_age'              => 'nullable|integer',
+        'informant_civil_status'     => 'nullable|string|max:30',
+        'informant_relationship'     => 'nullable|string|max:50',
+        'informant_contact_no'       => 'nullable|string|max:30',
+        'informant_address'          => 'nullable|string|max:255',
+
+        // D. Service, Amount, Fees
+        'amount'     => 'nullable|string|max:100',
+        'other_fee'  => 'nullable|string|max:100',
+        'deposit'    => 'nullable|string|max:100',
+        'cswd'       => 'nullable|string|max:50',
+        'dswd'       => 'nullable|string|max:50',
+        'remarks'    => 'nullable|string|max:255',
+
+        // E. Certification
+        'certifier_name'          => 'nullable|string|max:100',
+        'certifier_relationship'  => 'nullable|string|max:50',
+        'certifier_residence'     => 'nullable|string|max:255',
+        'certifier_amount'        => 'nullable|string|max:255',
+        'certifier_signature'     => 'nullable|string|max:255',
+        'certifier_signature_image'=> 'nullable|string',
+    ]);
+
+    // Autofill service and amount (always enforced)
+    $serviceName = $booking->package->name ?? '';
+    if ($booking->customizedPackage && $booking->customizedPackage->status === 'approved') {
+        $totalAmount = $booking->customizedPackage->custom_total_price;
+    } elseif ($booking->package) {
+        $totalAmount = $booking->package->items->sum(function ($item) {
+            return ($item->pivot->quantity ?? 1) * ($item->selling_price ?? $item->price ?? 0);
+        });
+    } else {
+        $totalAmount = 0;
+    }
+
+    // Save or update BookingDetail
+    $detail = $booking->detail ?: new BookingDetail(['booking_id' => $booking->id]);
+    $detail->fill($validated);
+
+    // Always overwrite these (enforced by system)
+    $detail->service = $serviceName;
+    $detail->amount = $validated['amount'] ?? 0;
+    $detail->booking_id = $booking->id;
+
+    // Set signature images
+    $detail->death_cert_released_signature         = $validated['death_cert_released_signature'] ?? null;
+    $detail->funeral_contract_released_signature   = $validated['funeral_contract_released_signature'] ?? null;
+    $detail->official_receipt_released_signature   = $validated['official_receipt_released_signature'] ?? null;
+    $detail->certifier_signature_image             = $validated['certifier_signature_image'] ?? null;
+
+    $detail->save();
+
+    // (Optional) You can notify the client that funeral parlor has updated info
+    if ($booking->client) {
+        $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+        $message = "The funeral parlor ({$parlorName}) has updated the information for your booking #{$booking->id}.";
+        $booking->client->notify(
+            new \App\Notifications\BookingStatusChanged($booking, $message)
+        );
+    }
+
+    // No status change here; only the client triggers the "for_review" status change.
+
+    return redirect()
+        ->route('funeral.bookings.show', $booking->id)
+        ->with('success', 'Personal & service details have been updated for this booking.');
+}
+
+// PHASE 3 FORM: Info of the Dead (Funeral Parlor Side)
+public function editInfo($bookingId)
+{
+    $booking = \App\Models\Booking::with([
+        'detail',
+        'package',            // service_package relation
+        'customizedPackage',  // customized_packages relation
+        'client',             // for display/use in blade
+    ])->findOrFail($bookingId);
+
+    // Authorization: only funeral staff from the correct parlor can access
+    if (
+        auth()->user()->role !== 'funeral' ||
+        auth()->user()->id != $booking->funeral_home_id
+    ) {
+        abort(403, 'Unauthorized access');
+    }
+
+
+    // Set editability: Funeral parlor can help edit IF not completed/finalized
+    // (Allow edit for 'in_progress', 'for_initial_review', 'for_review')
+
+
+    // Amount logic (always double check relations)
+    if ($booking->customized_package_id && $booking->customizedPackage) {
+        $totalAmount = $booking->customizedPackage->custom_total_price ?? 0;
+    } else {
+        $totalAmount = $booking->package->total_price ?? 0;
+    }
+
+    // Optionally get client name for header display
+    $clientName = $booking->client->name ?? null;
+
+    return view('funeral.bookings.editInfo', [
+        'booking'     => $booking,
+        'detail'      => $booking->detail,
+        'packageName' => $booking->package->name ?? '',
+        'totalAmount' => $totalAmount,
+        'clientName'  => $clientName,
+    ]);
+}
 
 
 }

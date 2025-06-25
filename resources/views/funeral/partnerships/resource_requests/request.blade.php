@@ -4,7 +4,11 @@
         <div class="d-flex align-items-center mb-4">
             <i class="bi bi-box-seam fs-2 text-primary me-2"></i>
             <h2 class="mb-0 fw-semibold">
-                Request Item: <span class="text-primary">{{ $item->name }}</span>
+                @if(isset($item) && $item)
+                    Request Item: <span class="text-primary">{{ $item->name }}</span>
+                @else
+                    Browse Partner Resources
+                @endif
             </h2>
         </div>
 
@@ -22,25 +26,36 @@
 
         <!-- Item Grid -->
         <div class="row g-4">
-
-            @php
-                $filteredShareableItems = $shareableItems->filter(function($item) {
-                    return $item->shareable_quantity > 0;
-                });
-            @endphp
-
-            @forelse($filteredShareableItems as $share)
-
+            @forelse($shareableItems as $share)
                 <div class="col-12 col-md-6 col-lg-4">
                     <div class="card shadow h-100 border-0 rounded-4 position-relative">
-                        <!-- Badge for quantity -->
+                        <!-- Badge for quantity/availability -->
                         <span class="position-absolute top-0 end-0 badge bg-success fs-6 mt-2 me-2 px-3">
-                            {{ $share->shareable_quantity }} Shareable stock
+                            @if($share->category && $share->category->is_asset)
+                                Available
+                            @else
+                                {{ $share->shareable_quantity }} Shareable
+                            @endif
                         </span>
+
                         <div class="card-body py-4">
+                            <!-- Type badge (Asset/Consumable) + Reservation mode for assets -->
+                            <div class="mb-2">
+                                @if($share->category && $share->category->is_asset)
+                                    <span class="badge bg-primary me-1">Asset</span>
+                                    <span class="badge bg-info text-dark">
+                                        {{ ucfirst($share->category->reservation_mode) }}
+                                    </span>
+                                @else
+                                    <span class="badge bg-secondary me-1">Consumable</span>
+                                @endif
+                                @if($share->shareable)
+                                    <span class="badge bg-success">Shareable</span>
+                                @endif
+                            </div>
                             <!-- Icon + Name -->
                             <div class="d-flex align-items-center mb-2">
-                                <i class="bi bi-archive fs-2 text-secondary me-2"></i>
+                                <i class="bi {{ $share->category && $share->category->is_asset ? 'bi-calendar2-check' : 'bi-archive' }} fs-2 text-secondary me-2"></i>
                                 <div>
                                     <h5 class="card-title fw-bold mb-1">{{ $share->name }}</h5>
                                     <div class="text-muted small">by {{ $share->funeralUser->name ?? 'Unknown' }}</div>
@@ -53,12 +68,24 @@
                                 <span class="text-muted small">Category: </span>
                                 <span class="fw-semibold">{{ $share->category->name ?? '-' }}</span>
                             </div>
-                            <form action="{{ route('funeral.partnerships.resource_requests.sendRequest', [$item->id, $share->id]) }}" method="POST">
-                                    <a href="{{ route('funeral.partnerships.resource_requests.createRequestForm', [$item->id, $share->id]) }}"
-                                    class="btn btn-outline-primary w-100 fw-semibold rounded-pill">
-                                        <i class="bi bi-send me-1"></i> Send Request
-                                    </a>
-                            </form>
+                            @if($share->category && $share->category->is_asset)
+                                <div class="mb-3">
+                                    <span class="text-muted small">Reservation Mode: </span>
+                                    <span class="fw-semibold text-primary">{{ ucfirst($share->category->reservation_mode) }}</span>
+                                </div>
+                            @endif
+
+                            @if(isset($item) && $item)
+                                <a href="{{ route('funeral.partnerships.resource_requests.createRequestForm', [$item->id, $share->id]) }}"
+                                   class="btn btn-outline-primary w-100 fw-semibold rounded-pill">
+                                    <i class="bi bi-send me-1"></i> Send Request
+                                </a>
+                            @else
+                                <a href="{{ route('funeral.partnerships.resource_requests.createRequestForm', [$share->id, $share->id]) }}"
+                                   class="btn btn-outline-primary w-100 fw-semibold rounded-pill">
+                                    <i class="bi bi-send me-1"></i> Send Request
+                                </a>
+                            @endif
                         </div>
                     </div>
                 </div>

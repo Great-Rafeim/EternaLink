@@ -12,53 +12,64 @@ use App\Models\BookingAgent;
 
 class BookingContinueController extends Controller
 {
-    public function edit($bookingId)
-    {
-        $booking = Booking::with([
-            'funeralHome', 'package.items', 'customizedPackage', 'agentAssignment'
-        ])->findOrFail($bookingId);
+public function edit($bookingId)
+{
+    $booking = Booking::with([
+        'funeralHome', 'package.items.category', 'customizedPackage', 'agentAssignment'
+    ])->findOrFail($bookingId);
 
-        if ($booking->client_user_id !== auth()->id()) abort(403);
+    if ($booking->client_user_id !== auth()->id()) abort(403);
 
-        $customized = $booking->customizedPackage
-            ?? CustomizedPackage::firstOrCreate(
-                ['booking_id' => $booking->id],
-                ['original_package_id' => $booking->package_id]
-            );
+    $customized = $booking->customizedPackage
+        ?? CustomizedPackage::firstOrCreate(
+            ['booking_id' => $booking->id],
+            ['original_package_id' => $booking->package_id]
+        );
 
-        $customItems = $customized->items()->get()->map(function ($item) {
-            return [
-                'item_id'        => $item->inventory_item_id,
-                'quantity'       => $item->quantity,
-                'substitute_for' => $item->substitute_for,
-            ];
-        });
+    $customItems = $customized->items()->get()->map(function ($item) {
+        return [
+            'item_id'        => $item->inventory_item_id,
+            'quantity'       => $item->quantity,
+            'substitute_for' => $item->substitute_for,
+        ];
+    });
 
-        $allItems = InventoryItem::where('funeral_home_id', $booking->funeral_home_id)
-            ->where('status', 'available')
-            ->where('quantity', '>', 0)
-            ->get()
-            ->groupBy('inventory_category_id');
+    $allItems = InventoryItem::where('funeral_home_id', $booking->funeral_home_id)
+        ->where('status', 'available')
+        ->where('quantity', '>', 0)
+        ->get()
+        ->groupBy('inventory_category_id');
 
-        // Pre-calculate for autofill in Blade
-        $packageName = $booking->package->name ?? '';
-        $totalAmount =
-            ($booking->customizedPackage && $booking->customizedPackage->status === 'approved')
-                ? $booking->customizedPackage->custom_total_price
-                : ($booking->package
-                    ? $booking->package->items->sum(fn($item) => ($item->pivot->quantity ?? 1) * ($item->selling_price ?? $item->price ?? 0))
-                    : 0);
+    // --- NEW: Fetch all asset categories for this package ---
+    // package_asset_categories table defines which asset categories are part of the package
+    $assetCategories = \DB::table('package_asset_categories')
+        ->join('inventory_categories', 'package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
+        ->where('package_asset_categories.service_package_id', $booking->package_id)
+        ->select('inventory_categories.id', 'inventory_categories.name', 'inventory_categories.is_asset')
+        ->where('inventory_categories.is_asset', 1)
+        ->get();
 
-        return view('client.bookings.continue.edit', [
-            'booking'         => $booking,
-            'customized'      => $customized,
-            'customItems'     => $customItems,
-            'allItems'        => $allItems,
-            'agentAssignment' => $booking->agentAssignment,
-            'packageName'     => $packageName,
-            'totalAmount'     => $totalAmount,
-        ]);
-    }
+    // Pre-calculate for autofill in Blade
+    $packageName = $booking->package->name ?? '';
+    $totalAmount =
+        ($booking->customizedPackage && $booking->customizedPackage->status === 'approved')
+            ? $booking->customizedPackage->custom_total_price
+            : ($booking->package
+                ? $booking->package->items->sum(fn($item) => ($item->pivot->quantity ?? 1) * ($item->selling_price ?? $item->price ?? 0))
+                : 0);
+
+    return view('client.bookings.continue.edit', [
+        'booking'         => $booking,
+        'customized'      => $customized,
+        'customItems'     => $customItems,
+        'allItems'        => $allItems,
+        'assetCategories' => $assetCategories, // <-- pass to blade
+        'agentAssignment' => $booking->agentAssignment,
+        'packageName'     => $packageName,
+        'totalAmount'     => $totalAmount,
+    ]);
+}
+
 
     public function updateInfo(Request $request, $bookingId)
     {
