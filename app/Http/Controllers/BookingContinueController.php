@@ -70,7 +70,7 @@ public function edit($bookingId)
     ]);
 }
 
-
+//////////////////////////////////////////////////////////////////////////
     public function updateInfo(Request $request, $bookingId)
     {
         $booking = Booking::with(['detail', 'package.items', 'customizedPackage'])->findOrFail($bookingId);
@@ -193,13 +193,24 @@ public function edit($bookingId)
                 new \App\Notifications\BookingStatusChanged($booking, $message)
             );
         }
-
+        // Notify assigned agent (if any)
+        $agent = $booking->agent;
+        if ($agent) {
+            $agentMessage = "Booking #{$bookingNumber} is now awaiting your review. "
+                        . "Client {$clientName} has submitted the required details for the info of deceased. Please check the booking for further action.";
+            $agent->notify(
+                new \App\Notifications\BookingStatusChanged($booking, $agentMessage)
+            );
+        }
 
 
         return redirect()
             ->route('client.dashboard')
             ->with('success', 'Personal & service details saved. Please wait for the funeral parlor to review.');
     }
+
+
+/////////////////////////////////////
 
     // PHASE 3 FORM: Info of the Dead
 public function info($bookingId)
@@ -228,6 +239,7 @@ public function info($bookingId)
     ]);
 }
 
+///////////////////////////////////////////////////
 
 public function update(Request $request, $bookingId)
 {
@@ -348,7 +360,14 @@ public function update(Request $request, $bookingId)
             new \App\Notifications\BookingStatusChanged($booking, $msg)
         );
     }
-
+    // Notify assigned agent (if any)
+    $agent = $booking->agent;
+    if ($agent) {
+        $agentMsg = "Client {$clientName} has submitted details for booking #{$bookingNumber}.";
+        $agent->notify(
+            new \App\Notifications\BookingStatusChanged($booking, $agentMsg)
+        );
+    }
     // Redirect to info-of-the-dead form (Phase 3)
     return redirect()->route('client.dashboard', $booking->id)
         ->with('success', 'Booking details saved. Please continue to fill up the personal details.');

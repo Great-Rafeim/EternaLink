@@ -57,12 +57,12 @@
                         <label class="form-label">Civil Status</label>
                         <select name="deceased_civil_status" class="form-select" required>
                             <option value="">--Select--</option>
-                            <option>Single</option>
-                            <option>Married</option>
-                            <option>Widow</option>
-                            <option>Widower</option>
-                            <option>Annulled</option>
-                            <option>Divorced</option>
+                            <option value="Single"   {{ old('deceased_civil_status', $detail->deceased_civil_status ?? '') == 'Single' ? 'selected' : '' }}>Single</option>
+                            <option value="Married"  {{ old('deceased_civil_status', $detail->deceased_civil_status ?? '') == 'Married' ? 'selected' : '' }}>Married</option>
+                            <option value="Widow"    {{ old('deceased_civil_status', $detail->deceased_civil_status ?? '') == 'Widow' ? 'selected' : '' }}>Widow</option>
+                            <option value="Widower"  {{ old('deceased_civil_status', $detail->deceased_civil_status ?? '') == 'Widower' ? 'selected' : '' }}>Widower</option>
+                            <option value="Annulled" {{ old('deceased_civil_status', $detail->deceased_civil_status ?? '') == 'Annulled' ? 'selected' : '' }}>Annulled</option>
+                            <option value="Divorced" {{ old('deceased_civil_status', $detail->deceased_civil_status ?? '') == 'Divorced' ? 'selected' : '' }}>Divorced</option>
                         </select>
                     </div>
                     <div class="col-md-3">

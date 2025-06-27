@@ -34,7 +34,12 @@ use App\Http\Controllers\AssetReservationController;
 use App\Http\Controllers\ResourceShareController;
 use App\Http\Controllers\AgentDashboardController;
 use App\Http\Controllers\ManageServiceController;
-
+use App\Http\Controllers\ClientToCemeteryController;
+use App\Http\Controllers\CemeteryBookingController;
+use App\Http\Controllers\CemeteryReportsController;
+use App\Http\Controllers\CemeteryDocumentsController;
+use App\Http\Controllers\CemeteryNotificationController;
+use App\Http\Controllers\CemeteryProfileController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -85,6 +90,15 @@ Route::prefix('client')
         Route::post('/bookings/continue/{booking}/info', [BookingContinueController::class, 'updateInfo'])->name('bookings.details.update');
 
 
+        //
+        Route::get('cemeteries', [ClientToCemeteryController::class, 'index'])->name('cemeteries.index');
+        Route::get('cemeteries/{cemetery}', [ClientCemeteryController::class, 'show'])->name('cemeteries.show');
+        // Show booking form for cemetery (GET)
+        Route::get('cemeteries/{user}/booking', [ClientToCemeteryController::class, 'booking'])->name('cemeteries.booking');
+                // Handle booking submission (POST)
+        Route::post('cemeteries/{user}/booking', [ClientToCemeteryController::class, 'submitBooking'])->name('cemeteries.booking.submit');
+        Route::get('/cemetery-bookings/{id}', [ClientToCemeteryController::class, 'show'])->name('cemeteries.show');
+        Route::put('/client/cemetery-bookings/{cemeteryBooking}/cancel', [ClientToCemeteryController::class, 'cancelCemeteryBooking'])->name('cemeteries.cancel');
     });
 
 
@@ -317,13 +331,48 @@ Route::match(['get', 'post'], '/agents/accept-invite/{invite}', [AgentController
 
 
 
-//Cemetery Routes
-Route::prefix('cemetery')->middleware(['auth', 'verified', 'role:cemetery'])->group(function () {
-    Route::resource('plots', PlotController::class);
-    Route::put('/plots/{plot}/update-reservation', [PlotController::class, 'updateReservation'])->name('plots.updateReservation');
-    Route::put('/plots/{plot}/update-occupation', [PlotController::class, 'updateOccupation'])->name('plots.updateOccupation');
-    Route::put('/plots/{plot}/mark-available', [PlotController::class, 'markAvailable'])->name('plots.markAvailable');
-});
+Route::prefix('cemetery')
+    ->middleware(['auth', 'verified', 'role:cemetery'])
+    ->name('cemetery.')
+    ->group(function () {
+        // Plots resource and actions
+        Route::resource('plots', PlotController::class);
+
+        // Remove this line! The resource already covers the index:
+        // Route::put('plots', [PlotController::class, 'index'])->name('plots.index');
+
+        // Documents & Reports (index should be GET, not PUT)
+        Route::get('documents', [CemeteryDocumentsController::class, 'index'])->name('documents.index');
+        Route::get('reports', [CemeteryReportssController::class, 'index'])->name('reports.index');
+
+        Route::put('plots/{plot}/update-reservation', [PlotController::class, 'updateReservation'])->name('plots.updateReservation');
+        Route::put('plots/{plot}/update-occupation', [PlotController::class, 'updateOccupation'])->name('plots.updateOccupation');
+        Route::put('plots/{plot}/mark-available', [PlotController::class, 'markAvailable'])->name('plots.markAvailable');
+
+        // Cemetery bookings
+        Route::get('bookings', [CemeteryBookingController::class, 'index'])->name('bookings.index');
+        Route::get('bookings/{booking}', [CemeteryBookingController::class, 'show'])->name('bookings.show');
+        Route::put('cemetery/bookings/{id}/approve', [CemeteryBookingController::class, 'approve'])->name('bookings.approve');
+
+        // Notifications
+        Route::get('notifications', [CemeteryNotificationController::class, 'index'])->name('notifications.index');
+
+        // Profile Edit
+        Route::get('profile/edit', [CemeteryProfileController::class, 'edit'])->name('profile.edit');
+        Route::put('profile/{id}', [CemeteryProfileController::class, 'update'])->name('profile.update');
+
+
+        Route::get('notifications', [CemeteryNotificationController::class, 'index'])->name('notifications.index');
+        Route::post('notifications/{notification}/read', [CemeteryNotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::post('notifications/read-all', [CemeteryNotificationController::class, 'markAllAsRead'])->name('notifications.read_all');
+        Route::delete('notifications/{notification}', [CemeteryNotificationController::class, 'destroy'])->name('notifications.destroy');
+        Route::get('/notifications', [CemeteryNotificationController::class, 'index'])->name('notifications.index');
+        Route::post('/notifications/mark-all-as-read', [CemeteryNotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
+        Route::post('/notifications/{id}/mark-as-read', [CemeteryNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
+        Route::delete('/notifications/{id}', [CemeteryNotificationController::class, 'destroy'])->name('notifications.destroy');
+        Route::get('/notifications/{id}/redirect', [CemeteryNotificationController::class, 'redirect'])->name('notifications.redirect');
+    });
+
 
 
 
@@ -342,6 +391,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 });
 
+
+Route::prefix('agent')->name('agent.')->middleware(['auth', 'verified', 'role:agent'])->group(function () {
+    // Agent dashboard
+    Route::get('/dashboard', [AgentDashboardController::class, 'index'])->name('dashboard');
+    // Show booking details
+    Route::get('/bookings/{booking}', [AgentDashboardController::class, 'show'])->name('bookings.show');
+    // Export booking PDF
+    Route::get('/bookings/{booking}/details/pdf', [BookingDetailPreviewController::class, 'exportPdf'])->name('bookings.exportPdf');
+
+    // --- Edit Booking (main booking form) ---
+    Route::get('/bookings/{booking}/edit', [AgentDashboardController::class, 'editBooking'])->name('bookings.editBooking');
+    Route::post('/bookings/{booking}/update', [AgentDashboardController::class, 'updateBooking'])->name('bookings.updateBooking');
+
+    // --- Edit Info of the Dead (deceased details) ---
+    Route::get('/bookings/{booking}/edit-info', [AgentDashboardController::class, 'editInfo'])->name('bookings.editInfo');
+    Route::patch('/bookings/{booking}/update-info', [AgentDashboardController::class, 'updateInfo'])->name('bookings.updateInfo');
+
+    Route::get('/bookings/{booking}/customize', [AgentDashboardController::class, 'editCustomization'])->name('bookings.customize');
+    Route::post('/bookings/{booking}/customize', [AgentDashboardController::class, 'updateCustomization'])->name('bookings.customize.update');
+    Route::post('/bookings/{booking}/customize/send', [AgentDashboardController::class, 'sendCustomizationRequest'])->name('bookings.customize.send');
+
+
+});
 
 
 

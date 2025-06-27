@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ $title ?? 'EternaLink Client Portal' }}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}" />    <meta name="viewport" content="width=device-width, initial-scale=1">
     {{-- Bootstrap CDN --}}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     {{-- Bootstrap Icons CDN --}}
@@ -100,6 +102,12 @@
                             <i class="bi bi-search me-1"></i> Find Funeral Parlors
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ route('client.cemeteries.index') }}" class="nav-link {{ request()->routeIs('client.parlors.index') ? 'active' : '' }}">
+                            <i class="bi bi-tree me-2"></i>Coordinate with Cemetery
+                        </a>
+                    </li>
+                                            
 
 <li class="nav-item dropdown">
     <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">

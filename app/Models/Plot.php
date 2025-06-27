@@ -11,23 +11,22 @@ class Plot extends Model
 
     // The attributes that are mass assignable
     protected $fillable = [
+        'cemetery_id',
         'plot_number',
         'section',
         'block',
         'type',
         'status',
-        'owner_name',
+        'owner_id',
         'deceased_name',
         'birth_date',
         'death_date',
-        'purchased_at',
     ];
 
     // Cast dates properly
     protected $dates = [
         'birth_date',
         'death_date',
-        'purchased_at',
         'created_at',
         'updated_at',
     ];
@@ -52,5 +51,13 @@ class Plot extends Model
         return $this->hasMany(PlotOccupation::class)->whereNotNull('archived_at');
     }
 
+    public function cemetery()
+    {
+        return $this->belongsTo(Cemetery::class);
+    }
 
+    public function owner()
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
 }

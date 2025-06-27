@@ -15,8 +15,7 @@ class FuneralBookingCustomizationController extends Controller
 
         // Only allow if this is their funeral home
         if ($booking->funeral_home_id !== auth()->id()) abort(403);
-
-        $customized = CustomizedPackage::where('booking_id', $booking->id)->with('items')->firstOrFail();
+ $customized = CustomizedPackage::where('booking_id', $booking->id)->with('items')->firstOrFail();
 
         return view('funeral.bookings.customization.show', compact('booking', 'customized'));
     }
@@ -35,7 +34,12 @@ class FuneralBookingCustomizationController extends Controller
 
         // Notify client
         $booking->client->notify(new \App\Notifications\CustomizationRequestApproved($customized));
-
+    // Also notify agent if assigned
+    $agent = $booking->agent;
+    if ($agent) {
+        $agent->notify(new \App\Notifications\CustomizationRequestApproved($customized));
+    }
+       
         return redirect()->route('funeral.bookings.index')->with('success', 'Customization approved.');
     }
 
@@ -51,6 +55,11 @@ class FuneralBookingCustomizationController extends Controller
 
         // Notify client
         $booking->client->notify(new \App\Notifications\CustomizationRequestDenied($customized));
+    // Also notify agent if assigned
+    $agent = $booking->agent;
+    if ($agent) {
+        $agent->notify(new \App\Notifications\CustomizationRequestDenied($customized));
+    }
 
         return redirect()->route('funeral.bookings.index')->with('error', 'Customization denied.');
     }

@@ -140,6 +140,10 @@ public function createdAssetReservations()
 {
     return $this->hasMany(AssetReservation::class, 'created_by');
 }
+public function cemetery()
+{
+    return $this->hasOne(Cemetery::class);
+}
 
 
 }

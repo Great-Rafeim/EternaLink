@@ -1,4 +1,6 @@
 <?php
+
+/*
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
@@ -162,3 +164,4 @@ class UpdateAssetReservationStatuses extends Command
         $this->info('Asset reservation and inventory statuses auto-synced! (Manual overrides respected)');
     }
 }
+*/

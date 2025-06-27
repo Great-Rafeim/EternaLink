@@ -15,7 +15,7 @@ class CreatePlotsTable extends Migration
             $table->string('block')->nullable();
             $table->enum('type', ['single', 'double', 'family']);
             $table->enum('status', ['available', 'reserved', 'occupied'])->default('available');
-            $table->string('owner_name')->nullable();       // For reserved plots
+            $table->string('deceased_name')->nullable();       // For reserved plots
             $table->string('deceased_name')->nullable();    // For occupied plots
             $table->date('birth_date')->nullable();         // For occupied plots
             $table->date('death_date')->nullable();         // For occupied plots

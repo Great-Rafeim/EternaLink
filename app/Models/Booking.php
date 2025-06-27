@@ -18,7 +18,7 @@ class Booking extends Model
     public const STATUS_DECLINED     = 'declined';
     public const STATUS_CANCELLED    = 'cancelled';
     public const STATUS_FOR_INITIAL_REVIEW = 'for_initial_review';    // After Phase 3, waiting for parlor to set fees
-
+    public const STATUS_FOR_FINAL_REVIEW = 'for_final_review';    // After Phase 3, waiting for parlor to set fees
     protected $fillable = [
         'client_user_id',
         'funeral_home_id',
@@ -32,7 +32,14 @@ class Booking extends Model
     ];
 
     // RELATIONSHIPS
-
+    public function getDecodedDetailsAttribute()
+    {
+        return $this->details ? json_decode($this->details, true) : [];
+    }
+public function cemeteryBooking()
+{
+    return $this->hasOne(\App\Models\CemeteryBooking::class, 'booking_id');
+}
     public function client()
     {
         return $this->belongsTo(User::class, 'client_user_id');
@@ -125,5 +132,8 @@ public function bookingAgent()
 {
     return $this->hasOne(\App\Models\BookingAgent::class, 'booking_id');
 }
-
+public function bookingDetail()
+{
+    return $this->hasOne(\App\Models\BookingDetail::class, 'booking_id');
+}
 }

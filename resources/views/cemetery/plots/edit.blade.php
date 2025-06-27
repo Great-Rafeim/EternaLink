@@ -1,79 +1,64 @@
 <x-cemetery-layout>
-    <div class="container mx-auto max-w-lg p-6 bg-gray-800 rounded-lg shadow-lg">
+    <div class="container" style="max-width:540px;">
+        <div class="card bg-dark border-0 shadow-lg my-5">
+            <div class="card-body p-4">
+                @if ($errors->any())
+                    <div class="alert alert-danger mb-4">
+                        <strong>There were some issues with your input:</strong>
+                        <ul class="mb-0 mt-2">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
 
-        <!-- Header with "Mark as Available" Button -->
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-semibold text-white">Edit Plot #{{ $plot->plot_number }}</h1>
-            
-            @if ($plot->status === 'reserved' || $plot->status === 'occupied')
-                <form action="{{ route('plots.markAvailable', $plot) }}" method="POST" onsubmit="return confirmMarkAvailable();" class="inline">
+                <form action="{{ route('cemetery.plots.update', $plot) }}" method="POST" autocomplete="off">
                     @csrf
                     @method('PUT')
-                    <button type="submit"
-                        class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded font-semibold text-sm shadow-md">
-                        Mark as Available
-                    </button>
+
+                    {{-- Header row: Title left, Status selector right --}}
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4">
+                        <h1 class="h4 fw-bold mb-0 text-white">
+                            Edit Plot #{{ $plot->plot_number }}
+                        </h1>
+                        <div class="d-flex align-items-center gap-2 mt-3 mt-md-0" style="min-width:220px;">
+                            <label for="status" class="form-label mb-0 me-2 text-white fw-normal">Status</label>
+                            <select name="status" id="status"
+                                class="form-select form-select-sm text-center
+                                {{ old('status', $plot->status) == 'available' ? 'text-success fw-bold'
+                                  : (old('status', $plot->status) == 'reserved' ? 'text-warning fw-bold'
+                                  : 'text-danger fw-bold') }}"
+                                style="width:130px;">
+                                <option value="available"
+                                    class="text-success fw-bold"
+                                    {{ old('status', $plot->status) == 'available' ? 'selected' : '' }}>
+                                    Available
+                                </option>
+                                <option value="reserved"
+                                    class="text-warning fw-bold"
+                                    {{ old('status', $plot->status) == 'reserved' ? 'selected' : '' }}>
+                                    Reserved
+                                </option>
+                                <option value="occupied"
+                                    class="text-danger fw-bold"
+                                    {{ old('status', $plot->status) == 'occupied' ? 'selected' : '' }}>
+                                    Occupied
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {{-- Regular plot fields (excluding status) --}}
+                    @include('cemetery.plots.forms.first', ['plot' => $plot])
+
+                    <div class="mt-4 text-end">
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="bi bi-save me-1"></i> Save Changes
+                        </button>
+                    </div>
                 </form>
-            @endif
-        </div>
-
-        <!-- Tabs -->
-        <div id="tabs" class="mb-6 flex border-b border-gray-600 overflow-x-auto">
-            <button type="button" data-tab="plot" class="tab-btn px-4 py-2 border-b-2 font-semibold focus:outline-none border-indigo-500 text-indigo-400">Plot</button>
-            <button type="button" data-tab="reservation" class="tab-btn ml-6 px-4 py-2 border-b-2 font-semibold focus:outline-none text-gray-400 hover:text-indigo-400">Reservation</button>
-            <button type="button" data-tab="occupy" class="tab-btn ml-6 px-4 py-2 border-b-2 font-semibold focus:outline-none text-gray-400 hover:text-indigo-400">Occupy</button>
-            <button type="button" data-tab="history" class="tab-btn ml-6 px-4 py-2 border-b-2 font-semibold focus:outline-none text-gray-400 hover:text-indigo-400">History</button>
-        </div>
-
-        <!-- Tab Contents -->
-        <div id="tab-contents">
-            <div data-tab-content="plot" class="tab-content text-white">
-                @include('cemetery.plots.forms.first', ['plot' => $plot])
-            </div>
-            <div data-tab-content="reservation" class="tab-content text-white hidden">
-                @include('cemetery.plots.forms.resform', ['plot' => $plot, 'reservation' => $plot->reservation])
-            </div>
-            <div data-tab-content="occupy" class="tab-content text-white hidden">
-                @include('cemetery.plots.forms.ocuform', ['plot' => $plot, 'occupation' => $plot->occupation])
-            </div>
-            <div data-tab-content="history" class="tab-content text-white hidden">
-                @include('cemetery.plots.forms.history', [
-                    'plot' => $plot,
-                    'reservationHistory' => $plot->reservationHistory,
-                    'occupationHistory' => $plot->occupationHistory
-                ])
             </div>
         </div>
     </div>
-
-    <style>.hidden { display: none; }</style>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const tabs = document.querySelectorAll('#tabs .tab-btn');
-            const contents = document.querySelectorAll('#tab-contents .tab-content');
-
-            function setActiveTab(tabName) {
-                tabs.forEach(btn => {
-                    btn.classList.toggle('border-indigo-500', btn.dataset.tab === tabName);
-                    btn.classList.toggle('text-indigo-400', btn.dataset.tab === tabName);
-                    btn.classList.toggle('text-gray-400', btn.dataset.tab !== tabName);
-                });
-
-                contents.forEach(content => {
-                    content.classList.toggle('hidden', content.dataset.tabContent !== tabName);
-                });
-            }
-
-            tabs.forEach(btn => {
-                btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
-            });
-
-            setActiveTab('plot');
-        });
-
-        function confirmMarkAvailable() {
-            return confirm("This action will mark the plot as available and archive the current reservation and occupation info. Continue?");
-        }
-    </script>
 </x-cemetery-layout>

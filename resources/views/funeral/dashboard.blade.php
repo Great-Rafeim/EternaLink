@@ -44,31 +44,5 @@
                 </div>
             </div>
         </div>
-
-        <!-- Recent Notifications -->
-        <div class="card text-bg-dark border-secondary shadow-sm">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span class="fw-semibold">Recent Notifications</span>
-                <a href="{{ route('funeral.notifications.index') }}" class="btn btn-sm btn-outline-info">View All</a>
-            </div>
-            <div class="list-group list-group-flush">
-                @forelse ($recentNotifications as $notification)
-                    <div class="list-group-item list-group-item-dark d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="fw-bold">{{ $notification->title }}</div>
-                            <small class="text-muted">{{ $notification->created_at->diffForHumans() }}</small>
-                        </div>
-                        <a href="{{ $notification->action_url }}" class="btn btn-sm btn-outline-primary">View</a>
-                    </div>
-                @empty
-                    <div class="list-group-item text-muted">No recent notifications.</div>
-                @endforelse
-
-                <!-- Pagination -->
-                <div class="px-3 py-2">
-                    {{ $recentNotifications->links() }}
-                </div>
-            </div>
-        </div>
     </div>
 </x-layouts.funeral>

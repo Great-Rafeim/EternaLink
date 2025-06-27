@@ -99,7 +99,7 @@
         
 
         {{-- Post New Update --}}
-        @if($booking->status === \App\Models\Booking::STATUS_ONGOING)
+        @if($booking->status === \App\Models\Booking::STATUS_ONGOING || $booking->status === \App\Models\Booking::STATUS_COMPLETED)
             
                 <div class="card-body py-4">
                     <form action="{{ route('funeral.bookings.manage-service.post-update', $booking->id) }}" method="POST" class="row g-3 align-items-end">
@@ -165,7 +165,7 @@
 
 
 {{-- ASSET ASSIGNMENT SECTION --}}
-@if($booking->status === \App\Models\Booking::STATUS_ONGOING)
+@if($booking->status === \App\Models\Booking::STATUS_ONGOING || $booking->status === \App\Models\Booking::STATUS_COMPLETED)
     <div class="card shadow-lg border-0 mb-4 rounded-4 animate__animated animate__fadeIn">
         <div class="card-header bg-gradient bg-info text-white rounded-top-4 d-flex align-items-center gap-2">
             <i class="bi bi-truck-front"></i>

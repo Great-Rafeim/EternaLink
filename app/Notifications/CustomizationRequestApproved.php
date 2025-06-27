@@ -65,7 +65,7 @@ class CustomizationRequestApproved extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('Customization Request Approved')
             ->greeting('Hello!')
-            ->line("Your customization request for Booking #{$this->booking->id} has been approved by the funeral parlor.")
+            ->line("Customization request for Booking #{$this->booking->id} has been approved by the funeral parlor.")
             ->action('View Booking', url(route('client.bookings.show', $this->booking->id)))
             ->line('You may now proceed with the next steps of your booking.');
     }

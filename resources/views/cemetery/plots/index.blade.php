@@ -1,92 +1,110 @@
 <x-cemetery-layout>
-    <h1 class="text-3xl font-bold mb-6">Cemetery Plots</h1>
+    <div class="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+        <h1 class="h3 fw-bold mb-0 text-white">Cemetery Plots</h1>
+        <a href="{{ route('cemetery.plots.create') }}"
+           class="btn btn-primary d-inline-flex align-items-center">
+            <i class="bi bi-plus-lg me-2"></i> Add New Plot
+        </a>
+    </div>
 
     {{-- Success message --}}
     @if(session('success'))
-        <div class="mb-4 p-4 bg-green-700 text-white rounded">
+        <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>
             {{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
 
     {{-- Filter/Search Form --}}
-    <form method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
-        <input type="text" name="search" placeholder="Search plot #, owner or deceased"
-            value="{{ request('search') }}"
-            class="col-span-2 px-4 py-2 rounded border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-green-500" />
-
-        <select name="status"
-            class="col-span-1 px-4 py-2 rounded border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
-            <option value="">All Statuses</option>
-            <option value="available" {{ request('status') == 'available' ? 'selected' : '' }}>Available</option>
-            <option value="reserved" {{ request('status') == 'reserved' ? 'selected' : '' }}>Reserved</option>
-            <option value="occupied" {{ request('status') == 'occupied' ? 'selected' : '' }}>Occupied</option>
-        </select>
-
-        <button type="submit"
-            class="col-span-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Filter</button>
-
-        <a href="{{ route('plots.index') }}"
-            class="col-span-1 text-center bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">Clear</a>
-
-        <a href="{{ route('plots.create') }}"
-            class="col-span-1 text-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Add New Plot</a>
+    <form method="GET" class="row g-3 align-items-end mb-4">
+        <div class="col-12 col-md-4 col-lg-3">
+            <label for="search" class="form-label text-secondary mb-1">Search</label>
+            <input type="text" name="search" id="search"
+                   value="{{ request('search') }}"
+                   placeholder="Plot #, owner, or deceased"
+                   class="form-control form-control-sm" />
+        </div>
+        <div class="col-12 col-md-3 col-lg-2">
+            <label for="status" class="form-label text-secondary mb-1">Status</label>
+            <select name="status" id="status" class="form-select form-select-sm">
+                <option value="">All Statuses</option>
+                <option value="available" {{ request('status') == 'available' ? 'selected' : '' }}>Available</option>
+                <option value="reserved" {{ request('status') == 'reserved' ? 'selected' : '' }}>Reserved</option>
+                <option value="occupied" {{ request('status') == 'occupied' ? 'selected' : '' }}>Occupied</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2 col-lg-2 d-grid">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-funnel me-1"></i> Filter
+            </button>
+        </div>
+        <div class="col-6 col-md-2 col-lg-2 d-grid">
+            <a href="{{ route('cemetery.plots.index') }}" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-x-circle me-1"></i> Clear
+            </a>
+        </div>
     </form>
 
     {{-- Table of Plots --}}
-    <div class="overflow-x-auto bg-gray-800 rounded-lg shadow-md">
-        <table class="min-w-full divide-y divide-gray-700 text-sm">
-            <thead class="bg-gray-900">
-                <tr>
-                    <th class="px-4 py-3 text-left font-semibold">Plot #</th>
-                    <th class="px-4 py-3 text-left font-semibold">Section</th>
-                    <th class="px-4 py-3 text-left font-semibold">Block</th>
-                    <th class="px-4 py-3 text-left font-semibold">Type</th>
-                    <th class="px-4 py-3 text-left font-semibold">Status</th>
-                    {{-- Removed Owner/Deceased header --}}
-                    <th class="px-4 py-3 text-left font-semibold">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-700">
+    <div class="card bg-dark border-0 shadow-sm rounded-3">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Plot #</th>
+                        <th>Section</th>
+                        <th>Block</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th style="width:160px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
                 @forelse ($plots as $plot)
-                    <tr class="hover:bg-gray-700">
-                        <td class="px-4 py-2">{{ $plot->plot_number }}</td>
-                        <td class="px-4 py-2">{{ $plot->section }}</td>
-                        <td class="px-4 py-2">{{ $plot->block }}</td>
-                        <td class="px-4 py-2">{{ ucfirst($plot->type) }}</td>
-                        <td class="px-4 py-2">
-                            <span class="px-2 py-1 text-xs rounded font-semibold
-                                {{ $plot->status === 'available' ? 'bg-green-600 text-white' :
-                                   ($plot->status === 'reserved' ? 'bg-yellow-500 text-black' :
-                                   'bg-red-600 text-white') }}">
-                                {{ ucfirst($plot->status) }}
-                            </span>
+                    <tr>
+                        <td>{{ $plot->plot_number }}</td>
+                        <td>{{ $plot->section }}</td>
+                        <td>{{ $plot->block }}</td>
+                        <td>{{ ucfirst($plot->type) }}</td>
+                        <td>
+                            @if($plot->status === 'available')
+                                <span class="badge bg-secondary">Available</span>
+                            @elseif($plot->status === 'reserved')
+                                <span class="badge bg-warning text-dark">Reserved</span>
+                            @else
+                                <span class="badge bg-danger">Occupied</span>
+                            @endif
                         </td>
-                        {{-- Removed Owner/Deceased data cell --}}
-                        <td class="px-4 py-2 space-x-2">
-                            <a href="{{ route('plots.edit', $plot) }}"
-                                class="inline-block bg-yellow-500 hover:bg-yellow-600 px-3 py-1 text-xs text-black rounded">Update</a>
-
-                            <form action="{{ route('plots.destroy', $plot) }}" method="POST" class="inline-block"
-                                onsubmit="return confirm('Delete this plot?')">
-                                @csrf
-                                @method('DELETE')
-                                <button class="bg-red-600 hover:bg-red-700 px-3 py-1 text-xs text-white rounded">
-                                    Delete
-                                </button>
-                            </form>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <a href="{{ route('cemetery.plots.edit', $plot) }}"
+                                   class="btn btn-sm btn-outline-warning">
+                                    <i class="bi bi-pencil-square"></i> Update
+                                </a>
+                                <form action="{{ route('cemetery.plots.destroy', $plot) }}" method="POST"
+                                      onsubmit="return confirm('Delete this plot?')" class="m-0 p-0">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="text-center text-gray-400 px-4 py-6">No plots found.</td>
+                        <td colspan="6" class="text-center text-secondary py-4">No plots found.</td>
                     </tr>
                 @endforelse
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     {{-- Pagination --}}
-    <div class="mt-6">
+    <div class="mt-4">
         {{ $plots->links() }}
     </div>
 </x-cemetery-layout>

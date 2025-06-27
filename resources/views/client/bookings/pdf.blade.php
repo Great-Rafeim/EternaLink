@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ $booking->funeralHome->name ?? 'Funeral Parlor' }} - Service Details</title>
-    <style>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}" />    <style>
         body { font-family: DejaVu Sans, Arial, Helvetica, sans-serif; font-size: 13px; margin: 0; padding: 0; }
         .container { padding: 28px 32px 0 32px; }
         .header { text-align: center; margin-bottom: 18px; }

@@ -6,6 +6,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Contracts\Queue\ShouldQueue; // Optional: remove if you don't want queued notifications
 use Illuminate\Notifications\Messages\MailMessage;
+use App\Models\AssetReservation;
 
 class BookingServiceEnded extends Notification implements ShouldQueue // Uncomment if you want to queue
 {

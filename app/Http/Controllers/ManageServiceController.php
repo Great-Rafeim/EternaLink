@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use App\Notifications\BookingServiceUpdated;
 use App\Notifications\BookingServiceEnded;
+use App\Notifications\BookingCompletedNotification;
+
 
 class ManageServiceController extends Controller
 {
@@ -288,32 +290,55 @@ public function assignAssets(Request $request, $bookingId)
      */
     public function endService(Request $request, $bookingId)
     {
-        $booking = Booking::findOrFail($bookingId);
+        $user = $request->user();
+        $booking = Booking::with([
+            'assetReservations.inventoryItem',
+            'client',
+            'funeralHome',
+            'agent',
+        ])->findOrFail($bookingId);
 
-        // Only allow if ongoing
-        if ($booking->status !== Booking::STATUS_ONGOING) {
-            return back()->with('error', 'Service can only be ended while ongoing.');
+        // Only allow if not already completed
+        if ($booking->status === Booking::STATUS_COMPLETED) {
+            return back()->with('warning', 'Service has already been ended.');
         }
 
-        DB::transaction(function () use ($booking) {
-            // Update booking status
-            $booking->status = Booking::STATUS_DONE;
+        DB::transaction(function () use ($booking, $user) {
+            // 1. Close all asset reservations, update inventory items
+            foreach ($booking->assetReservations as $reservation) {
+                $reservation->status = 'closed';
+                $reservation->save();
+
+                $item = $reservation->inventoryItem;
+                if ($item) {
+                    // Only update if NOT borrowed/shared partner
+                    if (
+                        $item->status !== 'borrowed_from_partner' &&
+                        $item->status !== 'shared_to_partner'
+                    ) {
+                        $item->status = 'available';
+                        $item->save();
+                    }
+                }
+            }
+
+            // 2. Update booking status
+            $booking->status = Booking::STATUS_COMPLETED;
             $booking->save();
 
-            // Log the service end
+            // 3. Log service closure
             BookingServiceLog::create([
                 'booking_id' => $booking->id,
-                'user_id'    => auth()->id(),
-                'message'    => 'Service completed.',
+                'user_id' => $user->id,
+                'message' => "Service ended by {$user->name} on " . now()->format('Y-m-d H:i'),
             ]);
+
+            // 4. Send notifications (client, funeralHome, agent)
+            $notifiables = collect([$booking->client, $booking->funeralHome, $booking->agent])
+                ->filter(); // Removes nulls
+            Notification::send($notifiables, new BookingCompletedNotification($booking));
         });
 
-        // Notify client and agent
-        $msg = "The funeral service for your booking has been completed.";
-        if ($booking->client) $booking->client->notify(new BookingServiceEnded($booking, $msg));
-        if ($booking->agent) $booking->agent->notify(new BookingServiceEnded($booking, $msg));
-
-        return redirect()->route('funeral.bookings.show', $booking->id)
-            ->with('success', 'Service marked as complete. Client and agent notified.');
+        return redirect()->back()->with('success', 'Service successfully ended and assets released.');
     }
 }

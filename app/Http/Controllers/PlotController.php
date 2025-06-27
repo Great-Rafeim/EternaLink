@@ -6,6 +6,7 @@ use App\Models\Plot;
 use Illuminate\Http\Request;
 use App\Models\Reservation;
 use App\Models\PlotOccupation;
+use Illuminate\Support\Facades\Auth;
 
 class PlotController extends Controller
 {
@@ -27,26 +28,30 @@ class PlotController extends Controller
         return view('cemetery.plots.index', compact('plots'));
     }
 
-    public function create()
+    public function create(Plot $plot)
     {
         return view('cemetery.plots.create');
     }
 
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'plot_number' => 'required|unique:plots,plot_number|max:255',
-            'section' => 'nullable|string|max:50',
-            'block' => 'nullable|string|max:50',
-            'type' => 'required|in:single,double,niche',
-        ]);
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'plot_number' => 'required|unique:plots,plot_number|max:255',
+        'section' => 'nullable|string|max:50',
+        'block' => 'nullable|string|max:50',
+        'type' => 'required|in:single,double,niche',
+    ]);
 
-        $validated['status'] = 'available';
+    $validated['status'] = 'available';
 
-        Plot::create($validated);
+    // Use the logged-in user's ID as the cemetery_id
+    $validated['cemetery_id'] = Auth::id();
 
-        return redirect()->route('plots.index')->with('success', 'Plot created successfully.');
-    }
+    Plot::create($validated);
+
+    return redirect()->route('cemetery.plots.index')->with('success', 'Plot created successfully.');
+}
+
 
     public function edit(Plot $plot)
     {
@@ -73,14 +78,14 @@ class PlotController extends Controller
 
         $plot->update($validated);
 
-        return redirect()->route('plots.index')->with('success', 'Plot updated successfully.');
+        return redirect()->route('cemetery.plots.index')->with('success', 'Plot updated successfully.');
     }
 
     public function destroy(Plot $plot)
     {
         $plot->delete();
 
-        return redirect()->route('plots.index')->with('success', 'Plot #' . $plot->plot_number . ' has been deleted.');
+        return redirect()->route('cemetery.plots.index')->with('success', 'Plot #' . $plot->plot_number . ' has been deleted.');
     }
 
     public function updateReservation(Request $request, Plot $plot)
@@ -101,7 +106,7 @@ class PlotController extends Controller
             array_merge($validated, ['plot_id' => $plot->id])
         );
 
-        return redirect()->route('plots.edit', $plot)->with('success', 'Reservation updated successfully.');
+        return redirect()->route('cemetery.plots.edit', $plot)->with('success', 'Reservation updated successfully.');
     }
 
     public function updateOccupation(Request $request, Plot $plot)
@@ -126,7 +131,7 @@ class PlotController extends Controller
             array_merge($validated, ['plot_id' => $plot->id])
         );
 
-        return redirect()->route('plots.edit', $plot)->with('success', 'Occupation info updated successfully.');
+        return redirect()->route('cemetery.plots.edit', $plot)->with('success', 'Occupation info updated successfully.');
     }
 
     public function markAvailable(Plot $plot)
@@ -141,7 +146,7 @@ class PlotController extends Controller
 
         $plot->update(['status' => 'available']);
 
-        return redirect()->route('plots.edit', $plot)->with('success', 'Plot marked as available. Previous records archived.');
+        return redirect()->route('cemetery.plots.edit', $plot)->with('success', 'Plot marked as available. Previous records archived.');
     }
 
 

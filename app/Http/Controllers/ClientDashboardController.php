@@ -8,32 +8,44 @@ use App\Models\BookingServiceLog;
 
 class ClientDashboardController extends Controller
 {
-public function index() 
-{
-    $bookings = \App\Models\Booking::with([
-        'package',
-        'funeralHome',
-        'bookingAgent.agentUser', // Correct!
-    ])
-    ->where('client_user_id', auth()->id())
-    ->orderByDesc('created_at')
-    ->paginate(10);
+    public function index() 
+    {
+        //for funeral bookings
+        $bookings = \App\Models\Booking::with([
+            'package',
+            'funeralHome',
+            'bookingAgent.agentUser', // Correct!
+        ])
+        ->where('client_user_id', auth()->id())
+        ->orderByDesc('created_at')
+        ->paginate(10);
 
-    return view('client.dashboard', compact('bookings'));
-}
+            // Cemetery bookings for this client, with full relation to show cemetery name (via its user)
+        $cemeteryBookings = \App\Models\CemeteryBooking::with([
+                'cemetery.user', // This gives you access to $cemeteryBooking->cemetery->user->name
+            ])
+            ->where('user_id', auth()->id())
+            ->orderByDesc('created_at')
+            ->paginate(10);
+
+        return view('client.dashboard', compact('bookings', 'cemeteryBookings'));
+    }
 
 
 
-    // Booking detail view
+// Booking detail view
 public function show($id)
 {
     $booking = Booking::with([
-        'package.items.category',
-        'funeralHome',
-        'bookingAgent.agentUser', // Eager load agentUser from bookingAgent
-    ])
-    ->where('client_user_id', Auth::id())
-    ->findOrFail($id);
+            'package.items.category',
+            'funeralHome',
+            'bookingAgent.agentUser',
+            // Eager load cemetery relationships:
+            'cemeteryBooking.cemetery.user',
+            'cemeteryBooking.plot',
+        ])
+        ->where('client_user_id', Auth::id())
+        ->findOrFail($id);
 
     // Prepare the package items array
     $packageItems = $booking->package->items->map(function($item) {
@@ -61,8 +73,15 @@ public function show($id)
         ->orderBy('created_at', 'desc')
         ->get();
 
-    return view('client.bookings.show', compact('booking', 'packageItems', 'assetCategories', 'serviceLogs'));
+    // Now you can use $booking->cemeteryBooking in your Blade
+    return view('client.bookings.show', compact(
+        'booking',
+        'packageItems',
+        'assetCategories',
+        'serviceLogs'
+    ));
 }
+
 
 
 
@@ -72,13 +91,46 @@ public function show($id)
         $booking = Booking::where('client_user_id', auth()->id())->findOrFail($bookingId);
 
         if (!in_array($booking->status, ['pending', 'confirmed', 'assigned'])) {
-            return back()->with('error', 'This booking cannot be canceled.');
+            return back()->with('error', 'This booking cannot be cancelled.');
         }
 
-        $booking->status = 'canceled';
+        $booking->status = 'cancelled';
         $booking->save();
 
-        return back()->with('success', 'Your booking has been canceled.');
+        return back()->with('success', 'Your booking has been cancelled.');
+    }
+    
+    public function update(Request $request, $id)
+    {
+        $cemetery = \App\Models\Cemetery::findOrFail($id);
+
+        $request->validate([
+            'address' => 'required|string|max:255',
+            'contact_number' => 'nullable|string|max:50',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|max:2048', // 2MB max
+        ]);
+
+        // Handle image upload
+        if ($request->has('remove_image') && $request->remove_image == '1') {
+            if ($cemetery->image_path && \Storage::disk('public')->exists($cemetery->image_path)) {
+                \Storage::disk('public')->delete($cemetery->image_path);
+            }
+            $cemetery->image_path = null;
+        }
+        if ($request->hasFile('image')) {
+            if ($cemetery->image_path && \Storage::disk('public')->exists($cemetery->image_path)) {
+                \Storage::disk('public')->delete($cemetery->image_path);
+            }
+            $cemetery->image_path = $request->file('image')->store('cemetery_images', 'public');
+        }
+
+        $cemetery->update($request->only('address', 'contact_number', 'description'));
+
+        $cemetery->save();
+
+        return redirect()->route('cemetery.edit', $cemetery->id)
+            ->with('success', 'Cemetery info updated successfully!');
     }
 
 

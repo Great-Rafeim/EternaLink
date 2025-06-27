@@ -26,15 +26,13 @@
             </span>
         </p>
 
-        {{-- Get all package item IDs to prevent substituting with any item already in the package --}}
         @php
             $packageItemIds = $booking->package->items->pluck('id')->toArray();
         @endphp
 
-
         <form action="{{ route('client.bookings.package_customization.send', $booking->id) }}" method="POST">
             @csrf
-            <h6 class="fw-bold mb-2">Customize Package</h6>
+            <h6 class="fw-bold mb-2">Original Package</h6>
             <div class="table-responsive">
                 <table class="table table-bordered align-middle">
                     <thead>
@@ -45,7 +43,6 @@
                             <th>Default Qty</th>
                             <th>Your Qty</th>
                             <th>Substitute Item</th>
-                            
                         </tr>
                     </thead>
                     <tbody>
@@ -57,7 +54,7 @@
                             $inputQty = $custom['quantity'] ?? $item->pivot->quantity;
                             $categoryItems = $allItems[$item->inventory_category_id] ?? collect();
                             $availableStock = $categoryItems->where('id', $selectedItemId)->first()->quantity ?? $item->quantity;
-                            $disabled = ($isAsset || $customized->status === 'pending') ? 'disabled' : '';
+                            $disabled = $isAsset ? 'disabled' : ''; // Remove status check
                         @endphp
                         <tr @if($isAsset) class="table-secondary" @endif>
                             <td>
@@ -107,7 +104,7 @@
 
                     {{-- Display asset categories even if there are no specific items (for completeness) --}}
                     @foreach($assetCategories ?? [] as $assetCategory)
-                        @if(! $booking->package->items->where('inventory_category_id', $assetCategory->id)->count())
+                        @if(!$booking->package->items->where('inventory_category_id', $assetCategory->id)->count())
                         <tr class="table-secondary">
                             <td>
                                 {{ $assetCategory->name }}
@@ -117,7 +114,6 @@
                         </tr>
                         @endif
                     @endforeach
-
                     </tbody>
                 </table>
             </div>
@@ -127,83 +123,82 @@
             </small>
 
             <div class="mt-4 d-flex gap-2">
-                <button type="submit" id="sendCustomizationBtn" class="btn btn-success"
-                    {{ $customized->status === 'pending' ? 'disabled' : '' }}>
+                <button type="submit" id="sendCustomizationBtn" class="btn btn-success">
                     Send Customization Request
                 </button>
             </div>
         </form>
 
+        {{-- ... rest of your code ... --}}
+
         {{-- CUSTOMIZED PACKAGE TABLE (Only if exists) --}}
-@if(in_array($customized->status, ['pending', 'approved', 'denied']) && $customized->items()->count())
-<div class="mt-5">
-    <h6 class="fw-bold mb-2">Your Customized Package</h6>
-    <div class="table-responsive">
-        <table class="table table-bordered align-middle">
-            <thead>
-                <tr>
-                    <th>Category</th>
-                    <th>Item</th>
-                    <th>Brand</th>
-                    <th>Qty</th>
-                </tr>
-            </thead>
-            <tbody>
-                @php
-                    // Get asset category IDs from customized items
-                    $customizedAssetCategoryIds = $customized->items
-                        ->filter(fn($item) => $item->inventoryItem && ($item->inventoryItem->category->is_asset ?? false))
-                        ->pluck('inventoryItem.category.id')
-                        ->unique()
-                        ->toArray();
-                @endphp
-                @foreach($customized->items as $customItem)
-                    @php
-                        $inventory = $customItem->inventoryItem;
-                        $category = $inventory->category->name ?? '-';
-                        $isAsset = $inventory->category->is_asset ?? false;
-                        $original = $customItem->substitute_for
-                            ? App\Models\InventoryItem::find($customItem->substitute_for)
-                            : null;
-                    @endphp
-                    <tr @if($isAsset) class="table-secondary" @endif>
-                        <td>
-                            {{ $category }}
-                            @if($isAsset)
-                                <span class="badge bg-secondary ms-1" title="Bookable Asset">Asset</span>
-                            @endif
-                        </td>
-                        <td>
-                            {{ $inventory->name }}
-                            @if($original)
-                                <br><small class="text-muted">(Substitute for: {{ $original->name }})</small>
-                            @endif
-                        </td>
-                        <td>{{ $inventory->brand ?? '-' }}</td>
-                        <td>{{ $customItem->quantity }}</td>
-                    </tr>
-                @endforeach
-
-                {{-- Show asset categories not in customized items --}}
-                @foreach($assetCategories ?? [] as $assetCategory)
-                    @if(!in_array($assetCategory->id, $customizedAssetCategoryIds))
-                        <tr class="table-secondary">
-                            <td>
-                                {{ $assetCategory->name }}
-                                <span class="badge bg-secondary ms-1" title="Bookable Asset">Asset</span>
-                            </td>
-                            <td colspan="3" class="text-muted">
-                                Included as a required asset (exact item to be assigned by parlor)
-                            </td>
+        @if(in_array($customized->status, ['pending', 'approved', 'denied']) && $customized->items()->count())
+        <div class="mt-5">
+            <h6 class="fw-bold mb-2">Your Customized Package</h6>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Item</th>
+                            <th>Brand</th>
+                            <th>Qty</th>
                         </tr>
-                    @endif
-                @endforeach
-            </tbody>
-        </table>
-    </div>
-</div>
-@endif
+                    </thead>
+                    <tbody>
+                        @php
+                            $customizedAssetCategoryIds = $customized->items
+                                ->filter(fn($item) => $item->inventoryItem && ($item->inventoryItem->category->is_asset ?? false))
+                                ->pluck('inventoryItem.category.id')
+                                ->unique()
+                                ->toArray();
+                        @endphp
+                        @foreach($customized->items as $customItem)
+                            @php
+                                $inventory = $customItem->inventoryItem;
+                                $category = $inventory->category->name ?? '-';
+                                $isAsset = $inventory->category->is_asset ?? false;
+                                $original = $customItem->substitute_for
+                                    ? App\Models\InventoryItem::find($customItem->substitute_for)
+                                    : null;
+                            @endphp
+                            <tr @if($isAsset) class="table-secondary" @endif>
+                                <td>
+                                    {{ $category }}
+                                    @if($isAsset)
+                                        <span class="badge bg-secondary ms-1" title="Bookable Asset">Asset</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    {{ $inventory->name }}
+                                    @if($original)
+                                        <br><small class="text-muted">(Substitute for: {{ $original->name }})</small>
+                                    @endif
+                                </td>
+                                <td>{{ $inventory->brand ?? '-' }}</td>
+                                <td>{{ $customItem->quantity }}</td>
+                            </tr>
+                        @endforeach
 
+                        {{-- Show asset categories not in customized items --}}
+                        @foreach($assetCategories ?? [] as $assetCategory)
+                            @if(!in_array($assetCategory->id, $customizedAssetCategoryIds))
+                                <tr class="table-secondary">
+                                    <td>
+                                        {{ $assetCategory->name }}
+                                        <span class="badge bg-secondary ms-1" title="Bookable Asset">Asset</span>
+                                    </td>
+                                    <td colspan="3" class="text-muted">
+                                        Included as a required asset (exact item to be assigned by parlor)
+                                    </td>
+                                </tr>
+                            @endif
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        @endif
 
         {{-- Status badge --}}
         @if($customized->status === 'pending')
@@ -216,36 +211,16 @@
     </div>
 </div>
 
-
 {{-- Customization script --}}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const customizationInputs = document.querySelectorAll('.customization-input:not([disabled])');
-    const sendBtn = document.getElementById('sendCustomizationBtn');
-    const originalValues = {};
-    customizationInputs.forEach(input => {
-        originalValues[input.name] = input.value;
-    });
-
-    function customizationChanged() {
-        return Array.from(customizationInputs).some(input => input.value !== originalValues[input.name]);
-    }
-
-    function updateFormState() {
-        if (sendBtn) sendBtn.disabled = !customizationChanged();
-    }
-
-    customizationInputs.forEach(input => {
-        input.addEventListener('input', updateFormState);
-    });
-
-    updateFormState();
-
+    // Only disable the inputs if status is pending (not the button!)
     @if($customized->status === 'pending')
-        customizationInputs.forEach(el => el.disabled = true);
+        document.querySelectorAll('.customization-input').forEach(el => el.disabled = true);
     @endif
 });
 </script>
+
 
 @php
     $disableNextForms = $customized->status === 'pending';
@@ -313,33 +288,41 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
 
     {{-- 5. Agent Assistance --}}
-    <div class="card mb-4">
-        <div class="card-header fw-semibold">5. Agent Assistance</div>
-        <div class="card-body row g-3">
-            <div class="col-md-4">
-                <label class="form-label">Do you need an agent to assist you?</label>
-                <select name="need_agent" class="form-select" id="needAgent" @if($disableNextForms) disabled @endif>
-                    <option value="" {{ old('need_agent', $booking->detail->need_agent ?? '') == '' ? 'selected' : '' }}>--Select--</option>
-                    <option value="yes" {{ old('need_agent', $booking->detail->need_agent ?? '') == 'yes' ? 'selected' : '' }}>Yes</option>
-                    <option value="no" {{ old('need_agent', $booking->detail->need_agent ?? '') == 'no' ? 'selected' : '' }}>No</option>
-                </select>
-            </div>
-            <div class="col-md-4" id="agentTypeDiv">
-                <label class="form-label">If yes, preferred agent:</label>
-                <select name="agent_type" class="form-select" id="agentType" @if($disableNextForms) disabled @endif>
-                    <option value="" {{ old('agent_type', $booking->detail->agent_type ?? '') == '' ? 'selected' : '' }}>--Select--</option>
-                    <option value="parlor" {{ old('agent_type', $booking->detail->agent_type ?? '') == 'parlor' ? 'selected' : '' }}>From Funeral Parlor</option>
-                    <option value="client" {{ old('agent_type', $booking->detail->agent_type ?? '') == 'client' ? 'selected' : '' }}>My Relative</option>
-                </select>
-            </div>
-            <div class="col-md-4" id="clientAgentEmailDiv">
-                <label class="form-label">Relative's Email</label>
-                <input type="email" name="client_agent_email" class="form-control"
-                    value="{{ old('client_agent_email', $booking->detail->client_agent_email ?? '') }}"
-                    @if($disableNextForms) disabled @endif>
-            </div>
+{{-- 5. Agent Assistance --}}
+<div class="card mb-4">
+    <div class="card-header fw-semibold">5. Agent Assistance</div>
+    <div class="card-body row g-3">
+        <div class="col-md-4">
+            <label class="form-label">Do you need an agent to assist you?</label>
+            @php
+                $needAgentValue = old('need_agent', $booking->detail->need_agent ?? '');
+            @endphp
+            <select name="need_agent" class="form-select" id="needAgent" @if($disableNextForms) disabled @endif>
+                <option value="" {{ $needAgentValue === '' ? 'selected' : '' }}>--Select--</option>
+                <option value="yes" {{ $needAgentValue === 'yes' ? 'selected' : '' }}>Yes</option>
+                <option value="no" {{ $needAgentValue === 'no' ? 'selected' : '' }}>No</option>
+            </select>
+        </div>
+        <div class="col-md-4" id="agentTypeDiv">
+            <label class="form-label">If yes, preferred agent:</label>
+            @php
+                $agentTypeValue = old('agent_type', $booking->detail->agent_type ?? '');
+            @endphp
+            <select name="agent_type" class="form-select" id="agentType" @if($disableNextForms) disabled @endif>
+                <option value="" {{ $agentTypeValue === '' ? 'selected' : '' }}>--Select--</option>
+                <option value="parlor" {{ $agentTypeValue === 'parlor' ? 'selected' : '' }}>From Funeral Parlor</option>
+                <option value="client" {{ $agentTypeValue === 'client' ? 'selected' : '' }}>My Relative</option>
+            </select>
+        </div>
+        <div class="col-md-4" id="clientAgentEmailDiv">
+            <label class="form-label">Relative's Email</label>
+            <input type="email" name="client_agent_email" class="form-control"
+                   value="{{ old('client_agent_email', $booking->detail->client_agent_email ?? '') }}"
+                   @if($disableNextForms) disabled @endif>
         </div>
     </div>
+</div>
+
 
 
             {{-- 6. Post Services --}}
@@ -383,25 +366,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     
-    {{-- 8. Upload Death Certificate --}}
-    <div class="card mb-4">
-        <div class="card-header fw-semibold">8. Upload Death Certificate</div>
-        <div class="card-body">
-            <label class="form-label">Death Certificate (PDF, JPG, or PNG)</label>
-            <input type="file" name="death_certificate_file" class="form-control"
-                   accept="application/pdf,image/jpeg,image/png" required>
-            @if($booking->detail && $booking->detail->death_certificate_path)
-                <div class="mt-2">
-                    <a href="{{ asset('storage/' . $booking->detail->death_certificate_path) }}" target="_blank" class="btn btn-link">
-                        View Uploaded Certificate
-                    </a>
-                </div>
-            @endif
-            <div class="form-text">
-                Maximum file size: 20 MB.
+{{-- 8. Upload Death Certificate --}}
+<div class="card mb-4">
+    <div class="card-header fw-semibold">8. Upload Death Certificate</div>
+    <div class="card-body">
+        <label class="form-label">Death Certificate (PDF, JPG, or PNG)</label>
+        <input 
+            type="file" 
+            name="death_certificate_file" 
+            class="form-control"
+            accept="application/pdf,image/jpeg,image/png"
+            @if(!($booking->detail && $booking->detail->death_certificate_path)) required @endif
+        >
+        @if($booking->detail && $booking->detail->death_certificate_path)
+            <div class="mt-2">
+                <a href="{{ asset('storage/' . $booking->detail->death_certificate_path) }}" target="_blank" class="btn btn-link">
+                    View Uploaded Certificate
+                </a>
             </div>
+        @endif
+        <div class="form-text">
+            Maximum file size: 20 MB.
         </div>
     </div>
+</div>
 
     {{-- Submit Button --}}
     <div class="mt-4">

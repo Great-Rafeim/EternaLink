@@ -56,7 +56,7 @@
 <div class="mb-3 row align-items-center" style="min-height:42px;">
     {{-- Left-aligned: Manage Service --}}
     <div class="col">
-        @if($booking->status === \App\Models\Booking::STATUS_ONGOING)
+        @if($booking->status === \App\Models\Booking::STATUS_ONGOING || $booking->status === \App\Models\Booking::STATUS_COMPLETED)
             <a href="{{ route('funeral.bookings.manage-service', $booking->id) }}"
                class="btn btn-primary">
                 <i class="bi bi-gear"></i> Manage Service
@@ -776,6 +776,54 @@
 @else
     <span class="text-muted mb-4 d-block">No agent assignment record found.</span>
 @endif
+
+                    {{-- SECTION: Cemetery & Plot Details --}}
+                    <h5 class="mb-2 mt-4"><i class="bi bi-building"></i> Cemetery Details</h5>
+                    <dl class="row mb-4">
+                        @php
+                            $cemetery = $booking->cemeteryBooking->cemetery ?? null;
+                            $plot = $booking->cemeteryBooking->plot ?? null;
+                        @endphp
+
+                        <dt class="col-sm-5 text-secondary">Cemetery Name</dt>
+                        <dd class="col-sm-7">
+                            {{ $cemetery?->user->name ?? 'Not specified' }}
+                        </dd>
+
+                        <dt class="col-sm-5 text-secondary">Cemetery Address</dt>
+                        <dd class="col-sm-7">
+                            {{ $cemetery?->address ?? 'Not specified' }}
+                        </dd>
+
+                        <dt class="col-sm-5 text-secondary">Plot Number</dt>
+                        <dd class="col-sm-7">
+                            @if($plot)
+                                {{ $plot->plot_number ?? 'Not specified' }}
+                            @else
+                                <span class="text-warning">Waiting for assignment</span>
+                            @endif
+                        </dd>
+
+                        <dt class="col-sm-5 text-secondary">Section</dt>
+                        <dd class="col-sm-7">
+                            @if($plot)
+                                {{ $plot->section ?? 'Not specified' }}
+                            @else
+                                <span class="text-warning">Waiting for assignment</span>
+                            @endif
+                        </dd>
+
+                        <dt class="col-sm-5 text-secondary">Block</dt>
+                        <dd class="col-sm-7">
+                            @if($plot)
+                                {{ $plot->block ?? 'Not specified' }}
+                            @else
+                                <span class="text-warning">Waiting for assignment</span>
+                            @endif
+                        </dd>
+                    </dl>
+
+
 
                         {{-- TIMELINE --}}
                         <h5 class="mb-2"><i class="bi bi-clock-history"></i> Timeline</h5>

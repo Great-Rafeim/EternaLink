@@ -125,7 +125,12 @@ public function show(Booking $booking)
         'client',
         'funeralHome',
         'agent',
-        'bookingAgent.agentUser', // make sure relationship exists
+        'bookingAgent.agentUser',
+        // Only eager-load approved cemetery booking (if any), with related plot/cemetery/user
+        'cemeteryBooking' => function ($q) {
+            $q->where('status', 'approved')
+              ->with(['cemetery.user', 'plot']);
+        },
     ]);
 
     $packageItems = $booking->package->items->map(function($item) {
@@ -175,15 +180,21 @@ public function show(Booking $booking)
         $invitationStatus = $invitation ? $invitation->status : null;
     }
 
+    // Pass only the approved cemetery booking to the view (may be null)
+    $cemeteryBooking = $booking->cemeteryBooking;
+
     return view('funeral.bookings.show', compact(
         'booking',
         'packageItems',
         'assetCategories',
         'parlorAgents',
         'invitationStatus',
-        'bookingAgent'
+        'bookingAgent',
+        'cemeteryBooking'
     ));
 }
+
+
 
 
 public function approve(Request $request, Booking $booking)
@@ -256,12 +267,20 @@ public function approve(Request $request, Booking $booking)
     }
 
     // ==== Notification Block ====
-    $msg = ($newStatus === Booking::STATUS_CONFIRMED)
+if ($booking->client) {
+    $clientMsg = ($newStatus === Booking::STATUS_CONFIRMED)
         ? "Your booking for <b>{$booking->package->name}</b> has been <b>PRE-APPROVED</b>. Please proceed with filling out the required information."
-        : "Your booking for <b>{$booking->package->name}</b> has been <b>APPROVED</b> and is now ready to start.";
+        : "Your booking for <b>{$booking->package->name}</b> has been <b>APPROVED</b>. You may now proceed to the next steps.";
+    $booking->client->notify(new BookingStatusChanged($booking, $clientMsg));
+}
 
-    if ($booking->client) $booking->client->notify(new BookingStatusChanged($booking, $msg));
-    if ($booking->agent) $booking->agent->notify(new BookingStatusChanged($booking, $msg));
+if ($booking->agent) {
+    $agentMsg = ($newStatus === Booking::STATUS_CONFIRMED)
+        ? "A booking for <b>{$booking->package->name}</b> assigned to your client has been <b>PRE-APPROVED</b>. The client can now fill out the required information."
+        : "A booking for <b>{$booking->package->name}</b> assigned to your client has been <b>APPROVED</b> and is now ready to proceed.";
+    $booking->agent->notify(new BookingStatusChanged($booking, $agentMsg));
+}
+
 
     return redirect()->route('funeral.bookings.index')
         ->with('success', 'Booking approved, consumable inventory updated.');
@@ -432,16 +451,21 @@ public function customizationShow($bookingId, $customizedPackageId)
         ->findOrFail($customizedPackageId);
 
     // --- Get all bookable asset categories linked to this package ---
-    $assetCategories = \DB::table('package_asset_categories')
-        ->join('inventory_categories', 'package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
-        ->where('package_asset_categories.service_package_id', $booking->package_id)
-        ->where('inventory_categories.is_asset', 1)
-        ->select(
-            'inventory_categories.id',
-            'inventory_categories.name',
-            'inventory_categories.is_asset'
-        )
-        ->get();
+$assetCategories = \DB::table('inventory_categories')
+    ->join('package_asset_categories', function ($join) use ($booking) {
+        $join->on('package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
+            ->where('package_asset_categories.service_package_id', $booking->package_id);
+    })
+    ->where('inventory_categories.is_asset', 1)
+    ->select(
+        'inventory_categories.id as id',
+        'inventory_categories.name as name',
+        'inventory_categories.is_asset',
+        'package_asset_categories.price as price'
+    )
+    ->get();
+
+
 
     return view('funeral.bookings.customization.show', compact('booking', 'customizedPackage', 'assetCategories'));
 }
@@ -474,6 +498,37 @@ public function customizationApprove(Request $request, $bookingId, $customizedPa
         return back()->with('error', 'No pending customization request to approve.');
     }
 
+    // Recalculate total: sum of all items + any required unassigned asset categories
+    $items = $customized->items()->with('inventoryItem.category')->get();
+
+    // Get assigned asset category IDs
+    $assignedAssetCatIds = $items
+        ->filter(fn($item) => $item->inventoryItem && ($item->inventoryItem->category->is_asset ?? false))
+        ->pluck('inventoryItem.category.id')
+        ->unique()
+        ->toArray();
+
+    // Get required asset categories for this package
+    $assetCategories = \DB::table('package_asset_categories')
+        ->join('inventory_categories', 'package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
+        ->where('package_asset_categories.service_package_id', $booking->package_id)
+        ->where('inventory_categories.is_asset', 1)
+        ->select(
+            'inventory_categories.id as id',
+            'inventory_categories.name as name',
+            'inventory_categories.is_asset',
+            'package_asset_categories.price as price'
+        )
+        ->get();
+
+    // Calculate totals
+    $itemsTotal = $items->sum(fn($item) => $item->unit_price * $item->quantity);
+
+    $missingAssetTotal = $assetCategories
+        ->filter(fn($cat) => !in_array($cat->id, $assignedAssetCatIds))
+        ->sum(fn($cat) => $cat->price);
+
+    $customized->custom_total_price = $itemsTotal + $missingAssetTotal;
     $customized->status = 'approved';
     $customized->save();
 
@@ -482,7 +537,12 @@ public function customizationApprove(Request $request, $bookingId, $customizedPa
 
     $booking->client->notify(new \App\Notifications\CustomizationRequestApproved($booking, $customized));
 
-    return back()->with('success', 'Customization approved and client notified.');
+    $agent = $booking->agent;
+    if ($agent) {
+        $agent->notify(new \App\Notifications\CustomizationRequestApproved($booking, $customized));
+    }
+
+    return back()->with('success', 'Customization approved, price recalculated, and client notified.');
 }
 
 // Deny customization request
@@ -505,6 +565,10 @@ public function customizationDeny(Request $request, $bookingId, $customizedPacka
     // Optionally: revert to original items if needed
 
     $booking->client->notify(new \App\Notifications\CustomizationRequestDenied($booking, $customized));
+    $agent = $booking->agent;
+    if ($agent) {
+        $agent->notify(new \App\Notifications\CustomizationRequestDenied($booking, $customized));
+    }
 
     return back()->with('success', 'Customization denied. Client notified.');
 }
@@ -701,6 +765,17 @@ public function updateInfo(Request $request, $bookingId)
             new \App\Notifications\BookingStatusChanged($booking, $message)
         );
     }
+
+
+// Notify agent (if any) with a similar message
+if ($booking->agent) {
+    $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+    $agentMessage = "The funeral parlor ({$parlorName}) has updated the information for booking #{$booking->id} assigned to your client.";
+    $booking->agent->notify(
+        new \App\Notifications\BookingStatusChanged($booking, $agentMessage)
+    );
+}
+
 
     // No status change here; only the client triggers the "for_review" status change.
 

@@ -1,4 +1,4 @@
-<form action="{{ route('plots.updateReservation', $plot) }}" method="POST" class="space-y-4">
+<form action="{{ route('cemetery.plots.updateReservation', $plot) }}" method="POST" class="space-y-4">
     @csrf
     @method('PUT')
 
