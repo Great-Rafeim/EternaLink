@@ -5,16 +5,17 @@ namespace App\Notifications;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Support\Facades\Log;
 
 class CemeteryBookingSubmitted extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public $booking;
+    public $cemeteryBookingId;
 
-    public function __construct($booking)
+    public function __construct($cemeteryBookingId)
     {
-        $this->booking = $booking;
+        $this->cemeteryBookingId = $cemeteryBookingId;
     }
 
     public function via($notifiable)
@@ -22,25 +23,25 @@ class CemeteryBookingSubmitted extends Notification implements ShouldQueue
         return ['database'];
     }
 
-    // This is the critical method for database notifications!
-    public function toDatabase($notifiable)
-    {
-        return [
-            'message'      => 'A new cemetery booking has been submitted by ' . $this->booking->user->name,
-            'booking_id'   => $this->booking->id,
-            'cemetery_id'  => $this->booking->cemetery_id,
-            'url'          => route('cemetery.bookings.show', $this->booking->id),
-        ];
+public function toArray($notifiable)
+{
+    $cemeteryBooking = \App\Models\CemeteryBooking::find($this->cemeteryBookingId);
+
+    $clientName = 'Client';
+    if ($cemeteryBooking && $cemeteryBooking->user_id) {
+        $clientUser = \App\Models\User::find($cemeteryBooking->user_id);
+        if ($clientUser) {
+            $clientName = $clientUser->name;
+        }
     }
 
-    // Optional: keep for other channels if you use them (e.g. mail, broadcast)
-    public function toArray($notifiable)
-    {
-        return [
-            'message'      => 'A new cemetery booking has been submitted by ' . $this->booking->user->name,
-            'booking_id'   => $this->booking->id,
-            'cemetery_id'  => $this->booking->cemetery_id,
-            'url'          => route('cemetery.bookings.show', $this->booking->id),
-        ];
-    }
+    return [
+        'message'      => 'A new cemetery booking has been submitted by ' . $clientName,
+        'cemetery_booking_id' => $cemeteryBooking ? $cemeteryBooking->id : null,
+        'cemetery_id'  => $cemeteryBooking ? $cemeteryBooking->cemetery_id : null,
+        'client_id'    => $cemeteryBooking ? $cemeteryBooking->user_id : null,
+        'url'          => $cemeteryBooking ? route('cemetery.bookings.show', $cemeteryBooking->id) : null,
+    ];
+}
+
 }

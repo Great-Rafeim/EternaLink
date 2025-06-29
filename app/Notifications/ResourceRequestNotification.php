@@ -138,6 +138,7 @@ class ResourceRequestNotification extends Notification implements ShouldQueue
             ->subject($subject)
             ->line($line)
             ->action('View Request', $url)
-            ->line('Thank you for using EternaLink!');
+            ->line('Thank you for using EternaLink!')
+->salutation('Regards,<br>EternaLink');
     }
 }

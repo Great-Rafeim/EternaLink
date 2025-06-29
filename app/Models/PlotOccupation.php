@@ -1,4 +1,6 @@
 <?php 
+// app/Models/PlotOccupation.php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -7,24 +9,19 @@ class PlotOccupation extends Model
 {
     protected $fillable = [
         'plot_id',
-        'deceased_name',
-        'birth_date',
-        'death_date',
-        'burial_date',
-        'cause_of_death',
-        'funeral_home',
-        'next_of_kin_name',
-        'next_of_kin_contact',
-        'interred_by',
-        'notes',
-        'archived_at', // ← Add this
-    ];
-
-
-    protected $casts = [
-        'birth_date' => 'date',
-        'death_date' => 'date',
-        'burial_date' => 'date',
+        'booking_id',
+        'deceased_first_name',
+        'deceased_middle_name',
+        'deceased_last_name',
+        'deceased_nickname',
+        'deceased_sex',
+        'deceased_birthday',
+        'deceased_date_of_death',
+        'deceased_age',
+        'deceased_civil_status',
+        'deceased_residence',
+        'deceased_citizenship',
+        'remarks',
     ];
 
     public function plot()
@@ -32,12 +29,10 @@ class PlotOccupation extends Model
         return $this->belongsTo(Plot::class);
     }
 
-    protected $dates = ['archived_at'];
-
-    // Optional: Scope to exclude archived
-    public function scopeActive(Builder $query)
+    public function booking()
     {
-        return $query->whereNull('archived_at');
+        return $this->belongsTo(CemeteryBooking::class, 'booking_id');
     }
+
 
 }

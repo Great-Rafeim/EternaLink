@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Hashidable;
 
 class Booking extends Model
 {
@@ -130,10 +131,19 @@ public function customizationRequests()
 
 public function bookingAgent()
 {
-    return $this->hasOne(\App\Models\BookingAgent::class, 'booking_id');
+    return $this->hasOne(\App\Models\BookingAgent::class, 'booking_id', 'id');
 }
 public function bookingDetail()
 {
     return $this->hasOne(\App\Models\BookingDetail::class, 'booking_id');
+}
+public function cemetery()
+{
+    return $this->belongsTo(Cemetery::class, 'cemetery_id');
+}
+
+public function serviceLogs()
+{
+    return $this->hasMany(\App\Models\BookingServiceLog::class, 'booking_id');
 }
 }

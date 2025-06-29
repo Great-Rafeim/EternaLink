@@ -17,24 +17,47 @@ use App\Notifications\ResourceRequestFulfilledNotification;
 
 class ResourceRequestController extends Controller
 {
-    public function index()
-    {
-        $userId = auth()->id();
+public function index()
+{
+    $userId = auth()->id();
 
-        $sentRequests = ResourceRequest::where('requester_id', $userId)
-            ->with(['requestedItem', 'providerItem', 'provider', 'assetReservation'])
-            ->latest()
-            ->get();
+    $activeStatuses = ['pending', 'approved'];
+    $finishedStatuses = ['fulfilled', 'rejected', 'cancelled'];
 
-        $receivedRequests = ResourceRequest::where('provider_id', $userId)
-            ->with(['requestedItem', 'providerItem', 'requester', 'assetReservation'])
-            ->latest()
-            ->get();
-        $myCategories = \App\Models\InventoryCategory::where('funeral_home_id', auth()->id())
-    ->orderBy('name')->get();
+    $sentRequestsActive = ResourceRequest::where('requester_id', $userId)
+        ->whereIn('status', $activeStatuses)
+        ->with(['requestedItem', 'providerItem', 'provider', 'assetReservation'])
+        ->latest()
+        ->get();
 
-        return view('funeral.partnerships.resource_requests.index', compact('sentRequests', 'receivedRequests', 'myCategories'));
-    }
+    $sentRequestsFinished = ResourceRequest::where('requester_id', $userId)
+        ->whereIn('status', $finishedStatuses)
+        ->with(['requestedItem', 'providerItem', 'provider', 'assetReservation'])
+        ->latest()
+        ->get();
+
+    $receivedRequestsActive = ResourceRequest::where('provider_id', $userId)
+        ->whereIn('status', $activeStatuses)
+        ->with(['requestedItem', 'providerItem', 'requester', 'assetReservation'])
+        ->latest()
+        ->get();
+
+    $receivedRequestsFinished = ResourceRequest::where('provider_id', $userId)
+        ->whereIn('status', $finishedStatuses)
+        ->with(['requestedItem', 'providerItem', 'requester', 'assetReservation'])
+        ->latest()
+        ->get();
+
+    $myCategories = \App\Models\InventoryCategory::where('funeral_home_id', $userId)
+        ->orderBy('name')->get();
+
+    return view('funeral.partnerships.resource_requests.index', compact(
+        'sentRequestsActive', 'sentRequestsFinished',
+        'receivedRequestsActive', 'receivedRequestsFinished',
+        'myCategories'
+    ));
+}
+
 
     public function store(Request $request)
     {

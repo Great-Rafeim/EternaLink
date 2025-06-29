@@ -23,13 +23,11 @@
                                 {{ $cemeteryBooking->cemetery->user->name ?? 'N/A' }}
                                 <div class="small text-muted">{{ $cemeteryBooking->cemetery->address ?? '' }}</div>
                             </dd>
-
                             <dt class="col-sm-4 text-muted">Client</dt>
                             <dd class="col-sm-8">
                                 {{ $cemeteryBooking->user->name ?? 'N/A' }}
                                 <div class="small text-muted">{{ $cemeteryBooking->user->email ?? '' }}</div>
                             </dd>
-
                             <dt class="col-sm-4 text-muted">Related Funeral Booking</dt>
                             <dd class="col-sm-8">
                                 @if($cemeteryBooking->funeralBooking)
@@ -42,37 +40,33 @@
                                     <span class="text-muted">N/A</span>
                                 @endif
                             </dd>
-
                             <dt class="col-sm-4 text-muted">Deceased Name</dt>
                             <dd class="col-sm-8">{{ $details['deceased_name'] ?? 'N/A' }}</dd>
-
                             <dt class="col-sm-4 text-muted">Plot Assigned</dt>
                             <dd class="col-sm-8">
                                 @if($cemeteryBooking->plot_id && $cemeteryBooking->plot)
                                     <span class="fw-bold text-success">Plot #{{ $cemeteryBooking->plot->plot_number }}</span>
                                     <span class="text-muted small">
-                                        ({{ ucfirst($cemeteryBooking->plot->type) }}, Section: {{ $cemeteryBooking->plot->section ?? 'N/A' }}, Block: {{ $cemeteryBooking->plot->block ?? 'N/A' }})
+                                        ({{ ucfirst($cemeteryBooking->plot->type) }},
+                                        Section: {{ $cemeteryBooking->plot->section ?? 'N/A' }},
+                                        Block: {{ $cemeteryBooking->plot->block ?? 'N/A' }})
                                     </span>
                                 @else
                                     <span class="text-warning">Waiting for cemetery to assign</span>
                                 @endif
                             </dd>
-
                             <dt class="col-sm-4 text-muted">Casket Size</dt>
                             <dd class="col-sm-8">{{ $cemeteryBooking->casket_size }}</dd>
-
                             <dt class="col-sm-4 text-muted">Interment Date</dt>
                             <dd class="col-sm-8">
                                 {{ $cemeteryBooking->interment_date ? \Carbon\Carbon::parse($cemeteryBooking->interment_date)->format('M d, Y') : '-' }}
                             </dd>
-
                             <dt class="col-sm-4 text-muted">Status</dt>
                             <dd class="col-sm-8">
                                 <span class="badge bg-{{ $cemeteryBooking->status == 'approved' ? 'success' : ($cemeteryBooking->status == 'rejected' ? 'danger' : 'warning') }}">
                                     {{ ucfirst($cemeteryBooking->status) }}
                                 </span>
                             </dd>
-
                             @if($cemeteryBooking->admin_notes)
                                 <dt class="col-sm-4 text-muted">Admin Notes</dt>
                                 <dd class="col-sm-8">
@@ -82,43 +76,50 @@
                                     </div>
                                 </dd>
                             @endif
-
                         </dl>
 
-                        {{-- Action Form for Pending Bookings --}}
                         @if($cemeteryBooking->status == 'pending')
                             <hr class="my-4">
-                            <form method="POST" action="{{ route('cemetery.bookings.approve', $cemeteryBooking->id) }}">
-                                @csrf
-                                @method('PUT')
-                                <div class="row align-items-end g-3 mb-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold">Assign Plot</label>
-                                        <select name="plot_id" class="form-select" required>
-                                            <option value="">Select Plot...</option>
-                                            @foreach($availablePlots as $plot)
-                                                <option value="{{ $plot->id }}">
-                                                    Plot #{{ $plot->plot_number }} 
-                                                    ({{ ucfirst($plot->type) }}, 
-                                                    Section: {{ $plot->section ?? 'N/A' }}, 
-                                                    Block: {{ $plot->block ?? 'N/A' }})
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 text-end">
-                                        <button type="submit" name="action" value="approve" class="btn btn-success px-4 rounded-pill me-2">
-                                            <i class="bi bi-check-circle"></i> Approve & Assign Plot
-                                        </button>
-                                        <button type="submit" name="action" value="reject" class="btn btn-danger px-4 rounded-pill">
-                                            <i class="bi bi-x-circle"></i> Reject
-                                        </button>
+                            <div class="row g-2 mb-3">
+                                <div class="col-12">
+                                    <div class="d-flex flex-wrap gap-2 align-items-end">
+                                        {{-- Approve & Assign Plot --}}
+                                        <form method="POST" action="{{ route('cemetery.bookings.approve', $cemeteryBooking->id) }}" class="d-flex flex-wrap align-items-end gap-2">
+                                            @csrf
+                                            @method('PUT')
+                                            <div>
+                                                <label class="form-label fw-semibold mb-1">Assign Plot</label>
+<select name="plot_id" class="form-select form-select-sm w-100" required>
+    <option value="">Select Plot...</option>
+    @foreach($availablePlots as $plot)
+        <option value="{{ $plot->id }}">
+            Plot #{{ $plot->plot_number }}
+            ({{ ucfirst($plot->type) }},
+            Section: {{ $plot->section ?? 'N/A' }},
+            Block: {{ $plot->block ?? 'N/A' }})
+        </option>
+    @endforeach
+</select>
+
+                                            </div>
+                                            <button type="submit" class="btn btn-success btn-sm px-4 rounded-pill">
+                                                <i class="bi bi-check-circle"></i> Approve & Assign Plot
+                                            </button>
+                                            @error('plot_id')
+                                                <div class="alert alert-danger mt-2 w-100">{{ $message }}</div>
+                                            @enderror
+                                        </form>
+                                        {{-- Reject --}}
+                                        <form method="POST" action="{{ route('cemetery.bookings.reject', $cemeteryBooking->id) }}">
+                                            @csrf
+                                            @method('PUT')
+                                            <button type="submit" class="btn btn-danger btn-sm px-4 rounded-pill">
+                                                <i class="bi bi-x-circle"></i> Reject
+                                            </button>
+                                        </form>
                                     </div>
                                 </div>
-                                @error('plot_id')
-                                    <div class="alert alert-danger mt-2">{{ $message }}</div>
-                                @enderror
-                            </form>
+                            </div>
                         @endif
 
                         <hr class="my-4">

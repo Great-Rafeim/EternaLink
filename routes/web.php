@@ -41,6 +41,7 @@ use App\Http\Controllers\CemeteryDocumentsController;
 use App\Http\Controllers\CemeteryNotificationController;
 use App\Http\Controllers\CemeteryProfileController;
 
+
 Route::get('/', function () {
     return view('welcome');
 });
@@ -165,6 +166,11 @@ Route::middleware(['auth', 'verified', '2fa', 'role:admin'])->group(function () 
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
     Route::get('/admin/login-history', [AdminDashboardController::class, 'loginHistory'])->name('admin.login-history');
 
+Route::get('admin/users/{user}', [AdminUserManagementController::class, 'show'])->name('admin.users.show');
+Route::patch('admin/users/{user}/approve', [AdminUserManagementController::class, 'approve'])->name('admin.users.approve');
+Route::patch('admin/users/{user}/reject', [AdminUserManagementController::class, 'reject'])->name('admin.users.reject');
+Route::get('/admin/users/{user}', [AdminUserManagementController::class, 'show'])->name('admin.users.show');
+
     // Admin user management routes
     Route::prefix('admin/users')->name('admin.users.')->group(function () {
         Route::get('/{role?}', [AdminUserManagementController::class, 'index'])->name('index');
@@ -179,6 +185,9 @@ Route::middleware(['auth', 'verified', '2fa', 'role:admin'])->group(function () 
         Route::post('/admin/users/{id}/restore', [AdminUserManagementController::class, 'restore'])->name('admin.users.restore');
         Route::get('/force-password-change', [PasswordChangeController::class, 'showForm'])->name('password.change.form');
         Route::post('/force-password-change', [PasswordChangeController::class, 'update'])->name('password.change.update');
+
+        Route::get('/{role?}', [AdminUserManagementController::class, 'index'])->name('index');
+
     });
 
     // Reset password confirmation form and action
@@ -252,7 +261,8 @@ Route::prefix('funeral')
 
         //Bookings
         Route::get('/bookings', [FuneralDashboardController::class, 'bookings'])->name('bookings.index');
-        Route::get('/bookings/{booking}', [FuneralDashboardController::class, 'show'])->name('bookings.show');
+        Route::get('/bookings/{booking}/details/pdf', [BookingDetailPreviewController::class, 'exportPdf'])->name('bookings.exportPdf');
+
         Route::get('/bookings/{booking}', [FuneralDashboardController::class, 'show'])->name('bookings.show');
         Route::patch('/bookings/{booking}/approve', [FuneralDashboardController::class, 'approve'])->name('bookings.approve');
         Route::patch('/bookings/{booking}/deny', [FuneralDashboardController::class, 'deny'])->name('bookings.deny');
@@ -347,12 +357,14 @@ Route::prefix('cemetery')
 
         Route::put('plots/{plot}/update-reservation', [PlotController::class, 'updateReservation'])->name('plots.updateReservation');
         Route::put('plots/{plot}/update-occupation', [PlotController::class, 'updateOccupation'])->name('plots.updateOccupation');
+        
         Route::put('plots/{plot}/mark-available', [PlotController::class, 'markAvailable'])->name('plots.markAvailable');
 
         // Cemetery bookings
         Route::get('bookings', [CemeteryBookingController::class, 'index'])->name('bookings.index');
         Route::get('bookings/{booking}', [CemeteryBookingController::class, 'show'])->name('bookings.show');
         Route::put('cemetery/bookings/{id}/approve', [CemeteryBookingController::class, 'approve'])->name('bookings.approve');
+        Route::put('/cemetery/bookings/{id}/reject', [CemeteryBookingController::class, 'reject'])->name('bookings.reject');
 
         // Notifications
         Route::get('notifications', [CemeteryNotificationController::class, 'index'])->name('notifications.index');
@@ -360,6 +372,13 @@ Route::prefix('cemetery')
         // Profile Edit
         Route::get('profile/edit', [CemeteryProfileController::class, 'edit'])->name('profile.edit');
         Route::put('profile/{id}', [CemeteryProfileController::class, 'update'])->name('profile.update');
+        
+Route::get('plots/{plot}/occupation/create', [PlotController::class, 'createOccupation'])->name('plots.occupations.create');
+Route::post('plots/{plot}/occupation', [PlotController::class, 'storeOccupation'])->name('plots.occupations.store');
+Route::get('plots/{plot}/occupation/{occupation}/edit', [PlotController::class, 'editOccupation'])->name('plots.occupations.edit');
+Route::put('plots/{plot}/occupation/{occupation}', [PlotController::class, 'updateOccupation'])->name('plots.occupations.update');
+Route::delete('plots/{plot}/occupation/{occupation}', [PlotController::class, 'destroyOccupation'])->name('plots.occupations.destroy');
+
 
 
         Route::get('notifications', [CemeteryNotificationController::class, 'index'])->name('notifications.index');
@@ -378,7 +397,6 @@ Route::prefix('cemetery')
 
 // Notification:
 Route::middleware(['auth', 'verified'])->group(function () {
-
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/{id}/redirect', [NotificationController::class, 'redirect'])->name('notifications.redirect');
@@ -386,9 +404,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
     Route::get('/notifications/{id}', [NotificationController::class, 'show'])->name('notifications.show');
-
-
-
 });
 
 

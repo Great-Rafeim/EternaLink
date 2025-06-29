@@ -24,7 +24,7 @@
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Status</th>
-                                    <th>Assigned Clients</th>
+
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -41,10 +41,7 @@
                                                 <span class="badge bg-secondary">Inactive</span>
                                             @endif
                                         </td>
-                                        <td>
-                                            {{-- Placeholder, replace with actual count --}}
-                                            <span class="badge bg-info">{{ $agent->clients_count ?? 0 }}</span>
-                                        </td>
+
                                         <td>
                                             <a href="#" 
                                             class="btn btn-sm btn-primary view-agent-btn"

@@ -33,7 +33,10 @@ class NotificationController extends Controller
                 $view = 'client.notifications.index';
                 break;
             case 'agent':
-                $view = 'agent.notifications.index'; // Only if you have this
+                $view = 'agent.notifications.index';
+                break;
+            case 'cemetery':
+                $view = 'cemetery.notifications.index';
                 break;
             default:
                 $view = 'client.notifications.index';

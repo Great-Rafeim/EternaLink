@@ -28,7 +28,7 @@ class CemeteryBookingAgentNotify extends Notification implements ShouldQueue // 
             'message'      => 'A client you are assisting has submitted a cemetery booking.',
             'booking_id'   => $this->booking->id,
             'cemetery_id'  => $this->booking->cemetery_id,
-            'url'          => route('cemetery.bookings.show', $this->booking->id),
+            'url'          => route('agent.bookings.show', $this->booking->id),
         ];
     }
 }

@@ -233,112 +233,156 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-        <form action="{{ route('client.bookings.continue.update', $booking->id) }}" method="POST" id="continueBookingForm" enctype="multipart/form-data">
-            @csrf
+ <form action="{{ route('client.bookings.continue.update', $booking->id) }}" method="POST" id="continueBookingForm" enctype="multipart/form-data">
+    @csrf
 
-            {{-- 2. Wake and Burial Schedule --}}
-            <div class="card mb-4">
-                <div class="card-header fw-semibold">2. Wake and Interment Schedule</div>
-                <div class="card-body row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Wake Start Date</label>
-                        <input type="date" name="wake_start_date" class="form-control" value="{{ old('wake_start_date', $booking->detail->wake_start_date ?? '') }}"
-                            @if($disableNextForms) disabled @endif>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Wake End Date</label>
-                        <input type="date" name="wake_end_date" class="form-control" value="{{ old('wake_end_date', $booking->detail->wake_end_date ?? '') }}"
-                            @if($disableNextForms) disabled @endif>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Interment Date</label>
-                        <input type="date" name="burial_date" class="form-control" value="{{ old('burial_date', $booking->detail->burial_date ?? '') }}"
-                            @if($disableNextForms) disabled @endif>
-                    </div>
-                </div>
+    {{-- 2. Wake and Burial Schedule --}}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">2. Wake and Interment Schedule</div>
+        <div class="card-body row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Wake Start Date <span class="text-danger">*</span></label>
+                <input type="date" name="wake_start_date" class="form-control" value="{{ old('wake_start_date', $booking->detail->wake_start_date ?? '') }}"
+                    @if($disableNextForms) disabled @else required @endif>
             </div>
-
-            {{-- 3. Cemetery/Plot --}}
-            <div class="card mb-4">
-                <div class="card-header fw-semibold">3. Cemetery Preferences</div>
-                <div class="card-body row g-3">
-                    <div class="col-md-8">
-                        <label class="form-label">Preferred Cemetery/Crematory</label>
-                        <input type="text" name="cemetery_or_crematory" class="form-control" value="{{ old('cemetery_or_crematory', $booking->detail->cemetery_or_crematory ?? '') }}"
-                            @if($disableNextForms) disabled @endif>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Do you already have a plot reserved?</label>
-                        <select name="has_plot_reserved" class="form-select" @if($disableNextForms) disabled @endif>
-                            <option value="" {{ is_null(old('has_plot_reserved', $booking->detail->has_plot_reserved ?? null)) ? 'selected' : '' }}>--Select--</option>
-                            <option value="1" {{ old('has_plot_reserved', $booking->detail->has_plot_reserved ?? null) == 1 ? 'selected' : '' }}>Yes</option>
-                            <option value="0" {{ old('has_plot_reserved', $booking->detail->has_plot_reserved ?? null) === 0 ? 'selected' : '' }}>No</option>
-                        </select>
-                    </div>
-                </div>
+            <div class="col-md-4">
+                <label class="form-label">Wake End Date <span class="text-danger">*</span></label>
+                <input type="date" name="wake_end_date" class="form-control" value="{{ old('wake_end_date', $booking->detail->wake_end_date ?? '') }}"
+                    @if($disableNextForms) disabled @else required @endif>
             </div>
-
-            {{-- 4. Preferred Attire --}}
-            <div class="card mb-4">
-                <div class="card-header fw-semibold">4. Preferred Attire</div>
-                <div class="card-body">
-                    <input type="text" name="attire" class="form-control" value="{{ old('attire', $booking->detail->attire ?? '') }}"
-                        @if($disableNextForms) disabled @endif>
-                </div>
+            <div class="col-md-4">
+                <label class="form-label">Interment Date <span class="text-danger">*</span></label>
+                <input type="date" name="interment_cremation_date" class="form-control" value="{{ old('interment_cremation_date', $booking->detail->interment_cremation_date ?? '') }}"
+                    @if($disableNextForms) disabled @else required @endif>
             </div>
-
-    {{-- 5. Agent Assistance --}}
-{{-- 5. Agent Assistance --}}
-<div class="card mb-4">
-    <div class="card-header fw-semibold">5. Agent Assistance</div>
-    <div class="card-body row g-3">
-        <div class="col-md-4">
-            <label class="form-label">Do you need an agent to assist you?</label>
-            @php
-                $needAgentValue = old('need_agent', $booking->detail->need_agent ?? '');
-            @endphp
-            <select name="need_agent" class="form-select" id="needAgent" @if($disableNextForms) disabled @endif>
-                <option value="" {{ $needAgentValue === '' ? 'selected' : '' }}>--Select--</option>
-                <option value="yes" {{ $needAgentValue === 'yes' ? 'selected' : '' }}>Yes</option>
-                <option value="no" {{ $needAgentValue === 'no' ? 'selected' : '' }}>No</option>
-            </select>
-        </div>
-        <div class="col-md-4" id="agentTypeDiv">
-            <label class="form-label">If yes, preferred agent:</label>
-            @php
-                $agentTypeValue = old('agent_type', $booking->detail->agent_type ?? '');
-            @endphp
-            <select name="agent_type" class="form-select" id="agentType" @if($disableNextForms) disabled @endif>
-                <option value="" {{ $agentTypeValue === '' ? 'selected' : '' }}>--Select--</option>
-                <option value="parlor" {{ $agentTypeValue === 'parlor' ? 'selected' : '' }}>From Funeral Parlor</option>
-                <option value="client" {{ $agentTypeValue === 'client' ? 'selected' : '' }}>My Relative</option>
-            </select>
-        </div>
-        <div class="col-md-4" id="clientAgentEmailDiv">
-            <label class="form-label">Relative's Email</label>
-            <input type="email" name="client_agent_email" class="form-control"
-                   value="{{ old('client_agent_email', $booking->detail->client_agent_email ?? '') }}"
-                   @if($disableNextForms) disabled @endif>
         </div>
     </div>
-</div>
 
-
-
-            {{-- 6. Post Services --}}
-            <div class="card mb-4">
-                <div class="card-header fw-semibold">6. Post Services</div>
-                <div class="card-body">
-                    <input type="text" name="post_services" class="form-control" value="{{ old('post_services', $booking->detail->post_services ?? '') }}"
-                        placeholder="e.g., after-care, memorial mass, etc." @if($disableNextForms) disabled @endif>
-                </div>
+    {{-- 3. Cemetery/Plot --}}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">3. Cemetery Preferences</div>
+        <div class="card-body row g-3">
+            <div class="col-md-8">
+                <label class="form-label">Preferred Cemetery/Crematory <span class="text-danger">*</span></label>
+                <input type="text" name="cemetery_or_crematory" class="form-control" value="{{ old('cemetery_or_crematory', $booking->detail->cemetery_or_crematory ?? '') }}"
+                    @if($disableNextForms) disabled @else required @endif>
             </div>
+            <div class="col-md-4">
+                <label class="form-label">Do you already have a plot reserved? <span class="text-danger">*</span></label>
+                <select name="has_plot_reserved" class="form-select" @if($disableNextForms) disabled @else required @endif>
+                    <option value="" {{ is_null(old('has_plot_reserved', $booking->detail->has_plot_reserved ?? null)) ? 'selected' : '' }}>--Select--</option>
+                    <option value="1" {{ old('has_plot_reserved', $booking->detail->has_plot_reserved ?? null) == 1 ? 'selected' : '' }}>Yes</option>
+                    <option value="0" {{ old('has_plot_reserved', $booking->detail->has_plot_reserved ?? null) === 0 ? 'selected' : '' }}>No</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    {{-- 4. Preferred Attire --}}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">4. Preferred Attire</div>
+        <div class="card-body">
+            <label class="form-label">Preferred Attire <span class="text-danger">*</span></label>
+            @php
+                $attireOptions = [
+                    'Barong Tagalog'          => 'Barong Tagalog',
+                    'White Dress'             => 'White Dress',
+                    'Black Formal Wear'       => 'Black Formal Wear',
+                    'White Shirt and Pants'   => 'White Shirt and Pants',
+                    'Traditional Filipiniana' => 'Traditional Filipiniana',
+                    'Religious Habit'         => 'Religious Habit',
+                    'Casual Attire'           => 'Casual Attire',
+                    'No Red Clothing'         => 'No Red Clothing',
+                    'All White Attire'        => 'All White Attire',
+                ];
+                $selectedAttire = old('attire', $booking->detail->attire ?? '');
+            @endphp
+            <select name="attire" class="form-select"
+                @if($disableNextForms) disabled @else required @endif>
+                <option value="" {{ $selectedAttire == '' ? 'selected' : '' }}>-- Select Preferred Attire --</option>
+                @foreach($attireOptions as $value => $label)
+                    <option value="{{ $value }}" {{ $selectedAttire == $value ? 'selected' : '' }}>
+                        {{ $label }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+    </div>
+
+    {{-- 5. Agent Assistance (optional) --}}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">5. Agent Assistance</div>
+        <div class="card-body row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Do you need an agent to assist you?</label>
+                @php
+                    $needAgentValue = old('need_agent');
+                    if ($needAgentValue === null && isset($booking->detail->need_agent)) {
+                        $needAgentValue = $booking->detail->need_agent == 1 ? 'yes' : ($booking->detail->need_agent == 0 ? 'no' : '');
+                    }
+                @endphp
+                <select name="need_agent" class="form-select" id="needAgent" @if($disableNextForms) disabled @endif>
+                    <option value="" {{ $needAgentValue === '' ? 'selected' : '' }}>--Select--</option>
+                    <option value="yes" {{ $needAgentValue === 'yes' ? 'selected' : '' }}>Yes</option>
+                    <option value="no" {{ $needAgentValue === 'no' ? 'selected' : '' }}>No</option>
+                </select>
+            </div>
+            <div class="col-md-4" id="agentTypeDiv">
+                <label class="form-label">If yes, preferred agent:</label>
+                @php
+                    $agentTypeValue = old('agent_type');
+                    if ($agentTypeValue === null && isset($booking->detail->agent_type)) {
+                        $agentTypeValue = $booking->detail->agent_type;
+                    }
+                @endphp
+                <select name="agent_type" class="form-select" id="agentType" @if($disableNextForms) disabled @endif>
+                    <option value="" {{ $agentTypeValue === '' ? 'selected' : '' }}>--Select--</option>
+                    <option value="parlor" {{ $agentTypeValue === 'parlor' ? 'selected' : '' }}>From Funeral Parlor</option>
+                    <option value="client" {{ $agentTypeValue === 'client' ? 'selected' : '' }}>My Relative</option>
+                </select>
+            </div>
+            <div class="col-md-4" id="clientAgentEmailDiv">
+                <label class="form-label">Relative's Email</label>
+                <input type="email" name="client_agent_email" class="form-control"
+                       value="{{ old('client_agent_email', $booking->detail->client_agent_email ?? '') }}"
+                       @if($disableNextForms) disabled @endif>
+            </div>
+        </div>
+    </div>
+
+    {{-- 6. Post Services --}}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">6. Post Services</div>
+        <div class="card-body">
+            <label class="form-label">Post Services <span class="text-danger">*</span></label>
+            @php
+                $postServicesOptions = [
+                    'After-care Support'    => 'After-care Support',
+                    'Memorial Mass'         => 'Memorial Mass',
+                    'Thanksgiving Service'  => 'Thanksgiving Service',
+                    'Home Blessing'         => 'Home Blessing',
+                    'Counseling'            => 'Counseling',
+                    'Memorial Keepsakes'    => 'Memorial Keepsakes',
+                    'Donation Arrangement'  => 'Donation Arrangement',
+                    'None'                  => 'None',
+                ];
+                $selectedService = old('post_services', $booking->detail->post_services ?? '');
+            @endphp
+            <select name="post_services" class="form-select" @if($disableNextForms) disabled @else required @endif>
+                <option value="" {{ $selectedService == '' ? 'selected' : '' }}>-- Select Post Service --</option>
+                @foreach($postServicesOptions as $value => $label)
+                    <option value="{{ $value }}" {{ $selectedService == $value ? 'selected' : '' }}>
+                        {{ $label }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+    </div>
 
     {{-- 7. Payment --}}
     <div class="card mb-4">
         <div class="card-header fw-semibold">7. Payment Details</div>
         <div class="card-body row g-3">
-
             @php
                 $hasCustom = $customized && $customized->status === 'approved';
                 $defaultAmount = $booking->package->items->sum(function($item) {
@@ -350,46 +394,43 @@ document.addEventListener('DOMContentLoaded', function () {
             @endphp
 
             <div class="col-md-4">
-                <label class="form-label">Total Amount</label>
+                <label class="form-label">Total Amount <span class="text-danger">*</span></label>
                 <input type="number" name="amount" id="totalAmount" class="form-control"
-                    value="{{ old('amount', $amount) }}" readonly>
+                    value="{{ old('amount', $amount) }}" readonly required>
             </div>
-
             <div class="col-md-4">
-                <label class="form-label">Payment Method</label>
-                <input type="text" class="form-control" value="Full Payment" readonly>
+                <label class="form-label">Payment Method <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" value="Full Payment" readonly required>
                 <input type="hidden" name="payment_method" value="full">
             </div>
         </div>
     </div>
 
-
-
-    
-{{-- 8. Upload Death Certificate --}}
-<div class="card mb-4">
-    <div class="card-header fw-semibold">8. Upload Death Certificate</div>
-    <div class="card-body">
-        <label class="form-label">Death Certificate (PDF, JPG, or PNG)</label>
-        <input 
-            type="file" 
-            name="death_certificate_file" 
-            class="form-control"
-            accept="application/pdf,image/jpeg,image/png"
-            @if(!($booking->detail && $booking->detail->death_certificate_path)) required @endif
-        >
-        @if($booking->detail && $booking->detail->death_certificate_path)
-            <div class="mt-2">
-                <a href="{{ asset('storage/' . $booking->detail->death_certificate_path) }}" target="_blank" class="btn btn-link">
-                    View Uploaded Certificate
-                </a>
+    {{-- 8. Upload Death Certificate --}}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">8. Upload Death Certificate</div>
+        <div class="card-body">
+            <label class="form-label">Death Certificate (PDF, JPG, or PNG) <span class="text-danger">*</span></label>
+            <input 
+                type="file" 
+                name="death_certificate_file" 
+                class="form-control"
+                accept="application/pdf,image/jpeg,image/png"
+                @if(!($booking->detail && $booking->detail->death_certificate_path)) required @endif
+                @if($disableNextForms) disabled @endif
+            >
+            @if($booking->detail && $booking->detail->death_certificate_path)
+                <div class="mt-2">
+                    <a href="{{ asset('storage/' . $booking->detail->death_certificate_path) }}" target="_blank" class="btn btn-link">
+                        View Uploaded Certificate
+                    </a>
+                </div>
+            @endif
+            <div class="form-text">
+                Maximum file size: 20 MB.
             </div>
-        @endif
-        <div class="form-text">
-            Maximum file size: 20 MB.
         </div>
     </div>
-</div>
 
     {{-- Submit Button --}}
     <div class="mt-4">
@@ -399,6 +440,7 @@ document.addEventListener('DOMContentLoaded', function () {
         </button>
     </div>
 </form>
+
 
  <script>
 document.addEventListener('DOMContentLoaded', function () {

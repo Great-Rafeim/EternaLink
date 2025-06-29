@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Hashidable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Partnership extends Model

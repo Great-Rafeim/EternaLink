@@ -37,20 +37,31 @@ class LoginRequest extends FormRequest
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function authenticate(): void
-    {
-        $this->ensureIsNotRateLimited();
+public function authenticate(): void
+{
+    $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
-            RateLimiter::hit($this->throttleKey());
+    $user = \App\Models\User::where('email', $this->email)->first();
 
-            throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
-            ]);
-        }
-
-        RateLimiter::clear($this->throttleKey());
+    if (! $user || ! \Illuminate\Support\Facades\Hash::check($this->password, $user->password)) {
+        RateLimiter::hit($this->throttleKey());
+        throw ValidationException::withMessages([
+            'email' => trans('auth.failed'),
+        ]);
     }
+
+    // Block if not approved
+    if (in_array($user->role, ['funeral', 'cemetery']) && $user->status !== 'approved') {
+        throw ValidationException::withMessages([
+            'email' => 'Your account is not yet approved by the administrator.',
+        ]);
+    }
+
+    Auth::login($user, $this->boolean('remember'));
+    RateLimiter::clear($this->throttleKey());
+}
+
+
 
     /**
      * Ensure the login request is not rate limited.

@@ -12,24 +12,43 @@ use Illuminate\Support\Facades\Auth; // <-- THIS IS CORRECT!
 
 class CemeteryBookingController extends Controller
 {
-    /**
-     * Display a listing of bookings for this cemetery.
-     */
-    public function index(Request $request)
-    {
-        $statuses = ['pending', 'approved', 'rejected'];
-        $status = $request->query('status', '');
+public function index(Request $request)
+{
+    $statuses = ['pending', 'approved', 'rejected'];
+    $status = $request->query('status', '');
 
-        $query = CemeteryBooking::with(['user', 'cemetery.user']);
+    // Get the current cemetery user
+    $user = Auth::user();
+    // Find the cemetery profile this user owns
+    $cemetery = \App\Models\Cemetery::where('user_id', $user->id)->first();
 
-        if ($status && in_array($status, $statuses)) {
-            $query->where('status', $status);
-        }
-
-        $bookings = $query->orderByDesc('created_at')->paginate(15);
-
-        return view('cemetery.bookings.index', compact('bookings', 'statuses', 'status'));
+    if (!$cemetery) {
+        // Optionally: return a view with an error, or redirect, or show an empty bookings list
+        return view('cemetery.bookings.index', [
+            'bookings' => collect(),
+            'statuses' => $statuses,
+            'status' => $status,
+            'cemeteryMissing' => true,
+        ]);
     }
+
+    // Only bookings for this cemetery
+    $query = \App\Models\CemeteryBooking::with(['user', 'cemetery.user'])
+        ->where('cemetery_id', $cemetery->id);
+
+    if ($status && in_array($status, $statuses)) {
+        $query->where('status', $status);
+    }
+
+    $bookings = $query->orderByDesc('created_at')->paginate(15);
+
+    return view('cemetery.bookings.index', [
+        'bookings' => $bookings,
+        'statuses' => $statuses,
+        'status' => $status,
+        'cemeteryMissing' => false,
+    ]);
+}
 
     /**
      * Display the specified booking.
@@ -53,10 +72,13 @@ public function show($id)
             : json_decode($cemeteryBooking->funeralBooking->details, true);
     }
 
-    // Only get plots for THIS cemetery user where status is available
-    $availablePlots = \App\Models\Plot::where('cemetery_id', Auth::id())
-        ->where('status', 'available')
-        ->get();
+    // Fix: Get plots for THIS cemetery (not user!), where status is available
+    $availablePlots = [];
+    if ($cemeteryBooking->cemetery) {
+        $availablePlots = \App\Models\Plot::where('cemetery_id', $cemeteryBooking->cemetery->id)
+            ->where('status', 'available')
+            ->get();
+    }
 
     return view('cemetery.bookings.show', compact('cemeteryBooking', 'details', 'availablePlots'));
 }
@@ -76,7 +98,7 @@ public function approve(Request $request, $id)
     ]);
 
     DB::transaction(function () use ($request, $id) {
-        $cemeteryBooking = CemeteryBooking::with(['funeralBooking'])->findOrFail($id);
+        $cemeteryBooking = CemeteryBooking::with(['funeralBooking', 'cemetery.user'])->findOrFail($id);
 
         // Related Funeral Booking
         $booking = $cemeteryBooking->funeralBooking;
@@ -108,38 +130,129 @@ public function approve(Request $request, $id)
                 ['plot_id' => $plot->id]
             );
 
-        // Notifications
-        // Get Client, Funeral Parlor, Agent
-        $client = User::find($booking->client_user_id);
-        $funeralParlor = User::find($booking->funeral_home_id);
+        // ---- Gather names for more descriptive notifications ----
+        $client         = User::find($booking->client_user_id);
+        $clientName     = $client->name ?? 'Client';
+        $funeralParlor  = User::find($booking->funeral_home_id);
+        $cemetery       = $cemeteryBooking->cemetery;
+        $cemeteryName   = $cemetery?->user?->name ?? 'Cemetery';
+        $plotNumber     = $plot->plot_number ?? 'N/A';
 
-        // Find agent via booking_agents table (assuming one agent per booking)
-        $agentUserId = DB::table('booking_agents')
-            ->where('booking_id', $booking->id)
-            ->value('agent_user_id');
-        $agent = $agentUserId ? User::find($agentUserId) : null;
-
-        // Prepare notification data
-        $notifData = [
-            'title' => 'Cemetery Booking Approved',
-            'message' => 'Your cemetery booking has been approved and a plot has been assigned.',
-            'booking_id' => $cemeteryBooking->id,
-            'plot_number' => $plot->plot_number,
-        ];
-
-        // Notify client, funeral parlor, agent (if found)
+        // ---- Notify client ----
         if ($client) {
+            $notifData = [
+                'title'         => 'Cemetery Booking Approved',
+                'message'       => "Dear <b>{$clientName}</b>, your cemetery booking at <b>{$cemeteryName}</b> has been <b>APPROVED</b> and plot <b>#{$plotNumber}</b> assigned.",
+                'booking_id'    => $cemeteryBooking->id,
+                'plot_number'   => $plotNumber,
+                'client_name'   => $clientName,
+                'cemetery_name' => $cemeteryName,
+                'role'          => 'client',
+            ];
             $client->notify(new \App\Notifications\CemeteryBookingApproved($notifData));
         }
+
+        // ---- Notify funeral parlor ----
         if ($funeralParlor) {
+            $notifData = [
+                'title'         => 'Cemetery Booking Approved (Client)',
+                'message'       => "A cemetery booking for <b>{$clientName}</b> at <b>{$cemeteryName}</b> has been <b>APPROVED</b>. Plot assigned: <b>#{$plotNumber}</b>.",
+                'booking_id'    => $cemeteryBooking->id,
+                'plot_number'   => $plotNumber,
+                'client_name'   => $clientName,
+                'cemetery_name' => $cemeteryName,
+                'role'          => 'funeral',
+            ];
             $funeralParlor->notify(new \App\Notifications\CemeteryBookingApproved($notifData));
         }
-        if ($agent) {
-            $agent->notify(new \App\Notifications\CemeteryBookingApproved($notifData));
+
+        // ---- Notify agent using the helper ----
+        $agentUser = $cemeteryBooking->actualAgentUser();
+        if ($agentUser) {
+            $notifData = [
+                'title'         => 'Cemetery Booking Approved (Client)',
+                'message'       => "Your client <b>{$clientName}</b> had a cemetery booking approved at <b>{$cemeteryName}</b>. Plot assigned: <b>#{$plotNumber}</b>.",
+                'booking_id'    => $cemeteryBooking->id,
+                'plot_number'   => $plotNumber,
+                'client_name'   => $clientName,
+                'cemetery_name' => $cemeteryName,
+                'role'          => 'agent',
+            ];
+            $agentUser->notify(new \App\Notifications\CemeteryBookingApproved($notifData));
+            \Log::info('[DEBUG] Notification sent to agent user.', [
+                'agent_user_id' => $agentUser->id,
+                'agent_email'   => $agentUser->email,
+            ]);
+        } else {
+            \Log::info('[DEBUG] No agent user found to notify for this cemetery booking.', [
+                'cemeteryBooking_id' => $cemeteryBooking->id
+            ]);
         }
     });
 
     return redirect()->route('cemetery.bookings.index')->with('success', 'Booking approved and plot assigned.');
 }
+
+
+
+
+public function reject(Request $request, $id)
+{
+    $cemeteryBooking = \App\Models\CemeteryBooking::with(['funeralBooking', 'cemetery.user'])->findOrFail($id);
+
+    // Set status to rejected, clear plot
+    $cemeteryBooking->status = 'rejected';
+    $cemeteryBooking->plot_id = null;
+    $cemeteryBooking->save();
+
+    // Get related funeral booking
+    $booking = $cemeteryBooking->funeralBooking;
+
+    // ---- Gather names for more descriptive notifications ----
+    $client         = $booking ? \App\Models\User::find($booking->client_user_id) : null;
+    $clientName     = $client?->name ?? 'Client';
+    $funeralParlor  = $booking ? \App\Models\User::find($booking->funeral_home_id) : null;
+    $cemetery       = $cemeteryBooking->cemetery;
+    $cemeteryName   = $cemetery?->user?->name ?? 'Cemetery';
+
+    // ---- Notify client ----
+    if ($client) {
+        $notifData = [
+            'title'         => 'Cemetery Booking Rejected',
+            'message'       => "Dear <b>{$clientName}</b>, your cemetery booking at <b>{$cemeteryName}</b> has been <b>REJECTED</b>. Please contact support for more information.",
+            'booking_id'    => $cemeteryBooking->id,
+            'client_name'   => $clientName,
+            'cemetery_name' => $cemeteryName,
+            'role'          => 'client',
+        ];
+        $client->notify(new \App\Notifications\CemeteryBookingRejected($notifData));
+    }
+
+    // ---- Notify agent using the helper ----
+    $agentUser = $cemeteryBooking->actualAgentUser();
+    if ($agentUser) {
+        $notifData = [
+            'title'         => 'Cemetery Booking Rejected (Client)',
+            'message'       => "Your client <b>{$clientName}</b> had a cemetery booking at <b>{$cemeteryName}</b> that was <b>REJECTED</b>.",
+            'booking_id'    => $cemeteryBooking->id,
+            'client_name'   => $clientName,
+            'cemetery_name' => $cemeteryName,
+            'role'          => 'agent',
+        ];
+        $agentUser->notify(new \App\Notifications\CemeteryBookingRejected($notifData));
+        \Log::info('[DEBUG] Notification sent to agent user.', [
+            'agent_user_id' => $agentUser->id,
+            'agent_email'   => $agentUser->email,
+        ]);
+    } else {
+        \Log::info('[DEBUG] No agent user found to notify for this cemetery booking.', [
+            'cemeteryBooking_id' => $cemeteryBooking->id
+        ]);
+    }
+
+    return redirect()->route('cemetery.bookings.index')
+        ->with('success', 'Booking has been rejected.');
+}
+
 
 }

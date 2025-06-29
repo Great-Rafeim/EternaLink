@@ -59,7 +59,8 @@ class ResourceRequestRejectedNotification extends Notification implements Should
             return (new MailMessage)
                 ->subject('Your Request was Rejected')
                 ->line("Your request for $item was rejected by {$this->resourceRequest->provider->name}.")
-                ->action('View Request', $url);
+                ->action('View Request', $url)
+                ->salutation('Regards,<br>EternaLink');
         }
     }
 }

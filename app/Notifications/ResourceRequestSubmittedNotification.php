@@ -55,13 +55,15 @@ class ResourceRequestSubmittedNotification extends Notification implements Shoul
                 ->subject('New Resource Request')
                 ->line("You received a new resource request for $item from {$this->resourceRequest->requester->name}.")
                 ->action('View Request', $url)
-                ->line('Please review and respond to the request.');
+                ->line('Please review and respond to the request.')
+->salutation('Regards,<br>EternaLink');
         } else {
             return (new MailMessage)
                 ->subject('Resource Request Submitted')
                 ->line("Your resource request for $item has been submitted to {$this->resourceRequest->provider->name}.")
                 ->action('View Your Request', $url)
-                ->line('You will be notified once it is processed.');
+                ->line('You will be notified once it is processed.')
+->salutation('Regards,<br>EternaLink');
         }
     }
 }

@@ -49,7 +49,7 @@ class BookingStatusChanged extends Notification implements ShouldQueue
     public function via($notifiable)
     {
         // Add 'mail' here if you want to email as well
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     /**
@@ -80,7 +80,7 @@ class BookingStatusChanged extends Notification implements ShouldQueue
     /**
      * Optional: mail notification (uncomment 'mail' in via() to use)
      */
-    /*
+
     public function toMail($notifiable)
     {
         $packageName = $this->booking->package->name ?? 'Service Package';
@@ -97,9 +97,10 @@ class BookingStatusChanged extends Notification implements ShouldQueue
             ->greeting('Hello!')
             ->line($message)
             ->action('View Booking', $url)
-            ->line('Thank you for using our service.');
+            ->line('Thank you for using our service.')
+->salutation('Regards,<br>EternaLink');
     }
-    */
+    
 
     /**
      * Helper: Detect role based on notifiable

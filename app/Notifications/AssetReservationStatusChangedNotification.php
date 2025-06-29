@@ -49,6 +49,7 @@ class AssetReservationStatusChangedNotification extends Notification implements 
             'reserved'  => 'Reservation created.',
             'in_use'    => 'Asset is now in use.',
             'completed' => 'Asset returned.',
+            'for_return'=> 'Asset returned by partner',
             'cancelled' => 'Reservation cancelled.',
             'received'  => 'Asset receipt acknowledged by provider.',
             'available' => 'Asset is available again.'
@@ -84,6 +85,7 @@ class AssetReservationStatusChangedNotification extends Notification implements 
             ->greeting('Hello!')
             ->line($message)
             ->action('View Reservations', route('funeral.assets.reservations.index'))
-            ->line('Thank you for using our system!');
+            ->line('Thank you for using our system!')
+            ->salutation('Regards,<br>EternaLink');
     }
 }

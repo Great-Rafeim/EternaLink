@@ -258,87 +258,147 @@ public function assignAssets(Request $request, $bookingId)
     /**
      * Store a new service log.
      */
-    public function postUpdate(Request $request, $bookingId)
-    {
-        $request->validate([
-            'message' => 'required|string|max:1000',
-        ]);
+public function postUpdate(Request $request, $bookingId)
+{
+    $request->validate([
+        'message' => 'required|string|max:1000',
+    ]);
 
-        $booking = Booking::findOrFail($bookingId);
+    $booking = Booking::findOrFail($bookingId);
 
-        // Only allow if ongoing
-        if ($booking->status !== Booking::STATUS_ONGOING) {
-            return back()->with('error', 'You can only post updates while the service is ongoing.');
-        }
-
-        BookingServiceLog::create([
-            'booking_id' => $booking->id,
-            'user_id'    => auth()->id(),
-            'message'    => $request->message,
-        ]);
-
-        // Notify client and agent
-        $msg = "Update on your funeral service: " . $request->message;
-        if ($booking->client) $booking->client->notify(new BookingServiceUpdated($booking, $msg));
-        if ($booking->agent) $booking->agent->notify(new BookingServiceUpdated($booking, $msg));
-
-        return back()->with('success', 'Service update posted and client notified.');
+    // Only allow if ongoing
+    if ($booking->status !== Booking::STATUS_ONGOING) {
+        return back()->with('error', 'You can only post updates while the service is ongoing.');
     }
+
+    BookingServiceLog::create([
+        'booking_id' => $booking->id,
+        'user_id'    => auth()->id(),
+        'message'    => $request->message,
+    ]);
+
+// Notify client
+if ($booking->client) {
+    $msg = "Update on your funeral service (Booking <b>#{$booking->id}</b>): {$request->message}";
+    \Log::info('[NOTIFY] Service update: Notifying client', [
+        'booking_id' => $booking->id,
+        'client_id'  => $booking->client->id,
+        'message'    => $msg,
+    ]);
+    $booking->client->notify(new BookingServiceUpdated($booking, $msg, 'client'));
+}
+
+// Notify agent via bookingAgent
+if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+    $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+    $clientName = $booking->client->name ?? 'the client';
+    $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+    $agentMsg = "Update for your client <b>{$clientName}</b> at <b>{$parlorName}</b> (Booking <b>#{$booking->id}</b>): {$request->message}";
+    if ($agentUser) {
+        \Log::info('[NOTIFY] Service update: Notifying agent', [
+            'booking_id' => $booking->id,
+            'agent_id'   => $agentUser->id,
+            'message'    => $agentMsg,
+        ]);
+        $agentUser->notify(new BookingServiceUpdated($booking, $agentMsg, 'agent'));
+    }
+}
+
+
+    return back()->with('success', 'Service update posted and client/agent notified.');
+}
+
 
     /**
      * End the service and update booking status.
      */
-    public function endService(Request $request, $bookingId)
-    {
-        $user = $request->user();
-        $booking = Booking::with([
-            'assetReservations.inventoryItem',
-            'client',
-            'funeralHome',
-            'agent',
-        ])->findOrFail($bookingId);
+public function endService(Request $request, $bookingId)
+{
+    $user = $request->user();
+    $booking = Booking::with([
+        'assetReservations.inventoryItem',
+        'client',
+        'funeralHome',
+        'bookingAgent', // <-- Important
+    ])->findOrFail($bookingId);
 
-        // Only allow if not already completed
-        if ($booking->status === Booking::STATUS_COMPLETED) {
-            return back()->with('warning', 'Service has already been ended.');
-        }
+    // Only allow if not already completed
+    if ($booking->status === Booking::STATUS_COMPLETED) {
+        return back()->with('warning', 'Service has already been ended.');
+    }
 
-        DB::transaction(function () use ($booking, $user) {
-            // 1. Close all asset reservations, update inventory items
-            foreach ($booking->assetReservations as $reservation) {
-                $reservation->status = 'closed';
-                $reservation->save();
+    DB::transaction(function () use ($booking, $user) {
+        // 1. Close all asset reservations, update inventory items
+        foreach ($booking->assetReservations as $reservation) {
+            $reservation->status = 'closed';
+            $reservation->save();
 
-                $item = $reservation->inventoryItem;
-                if ($item) {
-                    // Only update if NOT borrowed/shared partner
-                    if (
-                        $item->status !== 'borrowed_from_partner' &&
-                        $item->status !== 'shared_to_partner'
-                    ) {
-                        $item->status = 'available';
-                        $item->save();
-                    }
+            $item = $reservation->inventoryItem;
+            if ($item) {
+                // Only update if NOT borrowed/shared partner
+                if (
+                    $item->status !== 'borrowed_from_partner' &&
+                    $item->status !== 'shared_to_partner'
+                ) {
+                    $item->status = 'available';
+                    $item->save();
                 }
             }
+        }
 
-            // 2. Update booking status
-            $booking->status = Booking::STATUS_COMPLETED;
-            $booking->save();
+        // 2. Update booking status
+        $booking->status = Booking::STATUS_COMPLETED;
+        $booking->save();
 
-            // 3. Log service closure
-            BookingServiceLog::create([
-                'booking_id' => $booking->id,
-                'user_id' => $user->id,
-                'message' => "Service ended by {$user->name} on " . now()->format('Y-m-d H:i'),
-            ]);
+        // 3. Log service closure
+        BookingServiceLog::create([
+            'booking_id' => $booking->id,
+            'user_id' => $user->id,
+            'message' => "Service ended by {$user->name} on " . now()->format('Y-m-d H:i'),
+        ]);
 
-            // 4. Send notifications (client, funeralHome, agent)
-            $notifiables = collect([$booking->client, $booking->funeralHome, $booking->agent])
-                ->filter(); // Removes nulls
-            Notification::send($notifiables, new BookingCompletedNotification($booking));
-        });
+// 4. Notify all parties: client, agent, funeral home
+$notified = [];
 
-        return redirect()->back()->with('success', 'Service successfully ended and assets released.');
+// Client
+if ($booking->client) {
+    $booking->client->notify(new \App\Notifications\BookingCompletedNotification($booking, 'client'));
+    \Log::info('[NOTIFY] Service ended: Notifying client', [
+        'booking_id' => $booking->id,
+        'client_id' => $booking->client->id,
+        'client_name' => $booking->client->name,
+    ]);
+    $notified[] = $booking->client->id;
+}
+
+// Funeral Home
+if ($booking->funeralHome) {
+    $booking->funeralHome->notify(new \App\Notifications\BookingCompletedNotification($booking, 'funeral'));
+    \Log::info('[NOTIFY] Service ended: Notifying funeral home', [
+        'booking_id' => $booking->id,
+        'funeral_home_id' => $booking->funeralHome->id,
+        'funeral_home_name' => $booking->funeralHome->name,
+    ]);
+    $notified[] = $booking->funeralHome->id;
+}
+
+// Agent via bookingAgent
+if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+    $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+    if ($agentUser) {
+        $agentUser->notify(new \App\Notifications\BookingCompletedNotification($booking, 'agent'));
+        \Log::info('[NOTIFY] Service ended: Notifying agent', [
+            'booking_id' => $booking->id,
+            'agent_id' => $agentUser->id,
+            'agent_name' => $agentUser->name,
+        ]);
+        $notified[] = $agentUser->id;
     }
+}
+    });
+
+    return redirect()->back()->with('success', 'Service successfully ended and assets released.');
+}
+
+
 }

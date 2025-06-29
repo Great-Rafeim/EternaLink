@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Hashidable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class CemeteryBooking extends Model
@@ -36,6 +37,29 @@ class CemeteryBooking extends Model
         // Assuming the 'cemetery_id' is the foreign key
         return $this->belongsTo(\App\Models\Cemetery::class, 'cemetery_id', 'id');
     }
+public function actualCemeteryUser()
+{
+    return $this->cemetery ? $this->cemetery->user : null;
+}
+public function actualAgentUser()
+{
+    $funeralBooking = $this->funeralBooking;
+    if ($funeralBooking) {
+        // Find in booking_agents table by booking_id
+        $bookingAgent = \DB::table('booking_agents')
+            ->where('booking_id', $funeralBooking->id)
+            ->whereNotNull('agent_user_id')
+            ->orderByDesc('id') // if multiple rows, get the latest
+            ->first();
+
+        if ($bookingAgent && $bookingAgent->agent_user_id) {
+            return \App\Models\User::find($bookingAgent->agent_user_id);
+        }
+    }
+    return null;
+}
+
+
 
 
     // User (the client making the booking)
@@ -76,4 +100,9 @@ public function client()
     {
         return $this->proof_of_purchase_path ? asset('storage/' . $this->proof_of_purchase_path) : null;
     }
+
+
+
+
+
 }

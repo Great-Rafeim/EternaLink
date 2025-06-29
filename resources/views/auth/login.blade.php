@@ -21,16 +21,36 @@
                         <span class="text-red-400 text-sm">{{ $message }}</span>
                     @enderror
                 </div>
-
-                <!-- Password -->
-                <div>
-                    <label for="password" class="block text-sm mb-1">Password</label>
-                    <input id="password" type="password" name="password" required
-                           class="w-full px-4 py-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-                    @error('password')
-                        <span class="text-red-400 text-sm">{{ $message }}</span>
-                    @enderror
-                </div>
+<!-- Password with Show/Hide Button -->
+<div x-data="{ show: false }" class="relative">
+    <label for="password" class="block text-sm mb-1">Password</label>
+    <input :type="show ? 'text' : 'password'"
+           id="password"
+           name="password"
+           required
+           class="w-full px-4 py-2 pr-12 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
+    <button type="button"
+            @click="show = !show"
+            tabindex="-1"
+            class="absolute right-3 top-8 text-gray-400 hover:text-yellow-400 focus:outline-none"
+            aria-label="Toggle Password Visibility">
+        <!-- Eye Closed -->
+        <svg x-show="!show" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+             viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm6 0c0 5-7 9-9 9s-9-4-9-9 7-9 9-9 9 4 9 9z" />
+        </svg>
+        <!-- Eye Open -->
+        <svg x-show="show" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+             viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9 0-1.43.31-2.79.875-3.995M15 12a3 3 0 01-4.785 2.418M9.879 9.879A3 3 0 0115 12m2.121 2.121a3 3 0 010-4.242M20.117 20.117A10.05 10.05 0 0012 19c-5 0-9-4-9-9" />
+        </svg>
+    </button>
+    @error('password')
+        <span class="text-red-400 text-sm">{{ $message }}</span>
+    @enderror
+</div>
 
                 <!-- Remember Me -->
                 <div class="flex items-center">

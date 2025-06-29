@@ -30,7 +30,7 @@ class BookingServiceEnded extends Notification implements ShouldQueue // Uncomme
     public function via($notifiable)
     {
         // Send to database and optionally mail
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     /**
@@ -58,6 +58,7 @@ class BookingServiceEnded extends Notification implements ShouldQueue // Uncomme
             ->subject('Your Funeral Service is Complete')
             ->line($this->message)
             ->action('View Booking', url(route('client.bookings.show', $this->booking->id)))
-            ->line('Thank you for trusting our services.');
+            ->line('Thank you for trusting our services.')
+            ->salutation('Regards,<br>EternaLink');
     }
 }

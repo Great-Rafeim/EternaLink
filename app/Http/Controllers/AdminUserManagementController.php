@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Notifications\UserApproved;
+use App\Notifications\UserRejected;
 
 
 
@@ -32,27 +34,37 @@ class AdminUserManagementController extends Controller
         return redirect()->route('admin.users.index')->with('success', 'User created successfully.');
     }
 
-    public function index(Request $request, $role = null)
-    {
-        $validRoles = ['admin', 'client', 'funeral', 'cemetery'];
-        $query = User::query();
+public function index(Request $request)
+{
+    $query = User::query();
 
-        if ($role && in_array($role, $validRoles)) {
-            $query->where('role', $role);
-        }
-
-        if ($request->filled('search')) {
-            $query->where(function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                ->orWhere('email', 'like', '%' . $request->search . '%');
-            });
-        }
-
-        $users = $query->orderBy('created_at', 'desc')->paginate(10);
-        $role = $role ?? 'all';
-
-        return view('admin.users.index', compact('users', 'role'));
+    if ($request->filled('role')) {
+        $query->where('role', $request->role);
     }
+    if ($request->filled('status')) {
+        $query->where('status', $request->status);
+    }
+    if ($request->filled('search')) {
+        $query->where(function ($q) use ($request) {
+            $q->where('name', 'like', '%' . $request->search . '%')
+                ->orWhere('email', 'like', '%' . $request->search . '%');
+        });
+    }
+    $users = $query->orderBy('created_at', 'desc')->paginate(10);
+
+    $pendingRequests = User::where('status', 'pending')->latest()->get();
+
+    return view('admin.users.index', [
+        'users' => $users,
+        'pendingRequests' => $pendingRequests,
+        'role' => $request->role ?? '',
+        'status' => $request->status ?? '',
+    ]);
+}
+
+
+
+
 
 
     public function edit(User $user)
@@ -160,5 +172,30 @@ class AdminUserManagementController extends Controller
         return redirect()->route('admin.users.index')->with('success', 'User restored successfully.');
     }
 
+public function approve(User $user)
+{
+    $user->status = 'approved';
+    $user->save();
+
+    $user->notify(new \App\Notifications\UserApproved());
+
+    return back()->with('success', 'User approved.');
+}
+
+public function reject(User $user)
+{
+    $user->status = 'rejected';
+    $user->save();
+
+    $user->notify(new \App\Notifications\UserRejected());
+
+    return back()->with('success', 'User rejected.');
+}
+public function show(User $user)
+{
+    // If you want to load extra relations, do it here.
+    // Example: $user->load('profile');
+    return view('admin.users.show', compact('user'));
+}
 
 }

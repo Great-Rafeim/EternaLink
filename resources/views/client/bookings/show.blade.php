@@ -206,7 +206,6 @@
     </li>
     <li class="list-group-item d-flex fw-bold bg-light border-bottom-0">
         <span class="flex-fill">Asset/Item</span>
-        <span class="flex-fill">Category</span>
 
     </li>
     @forelse($assets as $pkg)
@@ -227,13 +226,9 @@
     @foreach($assetCategories ?? [] as $assetCategory)
         @if(!in_array($assetCategory->id, $assetCategoryIdsInItems))
             <li class="list-group-item d-flex bg-secondary bg-opacity-25">
-                <span class="flex-fill text-muted fst-italic">To be decided</span>
                 <span class="flex-fill">
                     <span class="fw-semibold">{{ $assetCategory->name }}</span>
-                    
                 </span>
-                
-
             </li>
         @endif
     @endforeach
@@ -241,69 +236,124 @@
 
 
 
-                        {{-- SECTION: Deceased Personal Details --}}
-                        <h5 class="mb-2"><i class="bi bi-person-vcard"></i> Deceased Personal Details</h5>
-                        <dl class="row mb-4">
-                            <dt class="col-sm-5 text-secondary">Full Name</dt>
-                            <dd class="col-sm-7">
-                                {{ collect([
-                                    $details?->deceased_first_name,
-                                    $details?->deceased_middle_name,
-                                    $details?->deceased_last_name
-                                ])->filter()->join(' ') ?: '—' }}
-                                @if($details?->deceased_nickname)
-                                    <span class="text-muted">(“{{ $details->deceased_nickname }}”)</span>
-                                @endif
-                            </dd>
-                            <dt class="col-sm-5 text-secondary">Residence</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_residence ?? '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Sex</dt>
-                            <dd class="col-sm-7">
-                                @if(isset($details->deceased_sex))
-                                    {{ $details->deceased_sex === 'M' ? 'Male' : ($details->deceased_sex === 'F' ? 'Female' : $details->deceased_sex) }}
-                                @else
-                                    —
-                                @endif
-                            </dd>
-                            <dt class="col-sm-5 text-secondary">Civil Status</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_civil_status ?? '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Birthday</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_birthday ? \Carbon\Carbon::parse($details->deceased_birthday)->format('M d, Y') : '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Age</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_age ?? '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Date of Death</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_date_of_death ? \Carbon\Carbon::parse($details->deceased_date_of_death)->format('M d, Y') : '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Time of Death</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_time_of_death ?? '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Cause of Death</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_cause_of_death ?? '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Place of Death</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_place_of_death ?? '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Religion</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_religion ?? '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Occupation</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_occupation ?? '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Citizenship</dt>
-                            <dd class="col-sm-7">{{ $details?->deceased_citizenship ?? '—' }}</dd>
-                            <dt class="col-sm-5 text-secondary">Father's Name</dt>
-                            <dd class="col-sm-7">
-                                {{ collect([
-                                    $details?->deceased_father_first_name,
-                                    $details?->deceased_father_middle_name,
-                                    $details?->deceased_father_last_name
-                                ])->filter()->join(' ') ?: '—' }}
-                            </dd>
-                            <dt class="col-sm-5 text-secondary">Mother's Maiden Name</dt>
-                            <dd class="col-sm-7">
-                                {{ collect([
-                                    $details?->deceased_mother_first_name,
-                                    $details?->deceased_mother_middle_name,
-                                    $details?->deceased_mother_last_name
-                                ])->filter()->join(' ') ?: '—' }}
-                            </dd>
-                            <dt class="col-sm-5 text-secondary">Corpse Disposal</dt>
-                            <dd class="col-sm-7">{{ $details?->corpse_disposal ?? '—' }}</dd>
-                        </dl>
+{{-- SECTION: Deceased Personal Details --}}
+<h5 class="mb-2"><i class="bi bi-person-vcard"></i> Deceased Personal Details</h5>
+<dl class="row mb-4">
+    <dt class="col-sm-5 text-secondary">Full Name</dt>
+    <dd class="col-sm-7">
+        {{ collect([
+            $details?->deceased_first_name,
+            $details?->deceased_middle_name,
+            $details?->deceased_last_name
+        ])->filter()->join(' ') ?: '—' }}
+        @if($details?->deceased_nickname)
+            <span class="text-muted">(“{{ $details->deceased_nickname }}”)</span>
+        @endif
+    </dd>
+    
+    {{-- DECEASED IMAGE --}}
+    @if(!empty($details?->deceased_image))
+        <dt class="col-sm-5 text-secondary align-self-center">Deceased Image</dt>
+        <dd class="col-sm-7">
+            <a href="{{ asset('storage/' . $details->deceased_image) }}"
+               target="_blank"
+               class="deceased-img-preview-link"
+               data-img="{{ asset('storage/' . $details->deceased_image) }}">
+                <img src="{{ asset('storage/' . $details->deceased_image) }}"
+                     alt="Deceased Image"
+                     style="width:80px; height:80px; object-fit:cover; border-radius: 8px; border: 1px solid #ddd; cursor: pointer;">
+            </a>
+            <a href="{{ asset('storage/' . $details->deceased_image) }}"
+               download
+               class="btn btn-sm btn-outline-primary ms-2 align-middle">
+                <i class="bi bi-download"></i> Download
+            </a>
+        </dd>
+    @endif
+
+    <dt class="col-sm-5 text-secondary">Residence</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_residence ?? '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Sex</dt>
+    <dd class="col-sm-7">
+        @if(isset($details->deceased_sex))
+            {{ $details->deceased_sex === 'M' ? 'Male' : ($details->deceased_sex === 'F' ? 'Female' : $details->deceased_sex) }}
+        @else
+            —
+        @endif
+    </dd>
+    <dt class="col-sm-5 text-secondary">Civil Status</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_civil_status ?? '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Birthday</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_birthday ? \Carbon\Carbon::parse($details->deceased_birthday)->format('M d, Y') : '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Age</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_age ?? '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Date of Death</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_date_of_death ? \Carbon\Carbon::parse($details->deceased_date_of_death)->format('M d, Y') : '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Time of Death</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_time_of_death ?? '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Cause of Death</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_cause_of_death ?? '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Place of Death</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_place_of_death ?? '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Religion</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_religion ?? '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Occupation</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_occupation ?? '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Citizenship</dt>
+    <dd class="col-sm-7">{{ $details?->deceased_citizenship ?? '—' }}</dd>
+    <dt class="col-sm-5 text-secondary">Father's Name</dt>
+    <dd class="col-sm-7">
+        {{ collect([
+            $details?->deceased_father_first_name,
+            $details?->deceased_father_middle_name,
+            $details?->deceased_father_last_name
+        ])->filter()->join(' ') ?: '—' }}
+    </dd>
+    <dt class="col-sm-5 text-secondary">Mother's Maiden Name</dt>
+    <dd class="col-sm-7">
+        {{ collect([
+            $details?->deceased_mother_first_name,
+            $details?->deceased_mother_middle_name,
+            $details?->deceased_mother_last_name
+        ])->filter()->join(' ') ?: '—' }}
+    </dd>
+    <dt class="col-sm-5 text-secondary">Corpse Disposal</dt>
+    <dd class="col-sm-7">{{ $details?->corpse_disposal ?? '—' }}</dd>
+</dl>
+
+{{-- Modal for image expand --}}
+<div class="modal fade" id="deceasedImgModal" tabindex="-1" aria-labelledby="deceasedImgModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-transparent border-0">
+            <div class="modal-body text-center p-0">
+                <img src="" id="deceasedImgModalImg" class="img-fluid rounded" alt="Deceased Image" style="max-height:75vh;">
+                <a id="deceasedImgModalDownload" href="#" download class="btn btn-primary mt-3">
+                    <i class="bi bi-download"></i> Download
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.deceased-img-preview-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            var imgUrl = this.getAttribute('data-img');
+            var modalImg = document.getElementById('deceasedImgModalImg');
+            var modalDownload = document.getElementById('deceasedImgModalDownload');
+            modalImg.src = imgUrl;
+            modalDownload.href = imgUrl;
+            var modal = new bootstrap.Modal(document.getElementById('deceasedImgModal'));
+            modal.show();
+        });
+    });
+});
+</script>
+@endpush
+
 
                         {{-- SECTION: Documents --}}
                         <h5 class="mb-2"><i class="bi bi-file-earmark-text"></i> Documents</h5>
@@ -490,50 +540,47 @@
                         @endif
 
                     {{-- SECTION: Cemetery & Plot Details --}}
-                    <h5 class="mb-2 mt-4"><i class="bi bi-building"></i> Cemetery Details</h5>
-                    <dl class="row mb-4">
-                        @php
-                            $cemetery = $booking->cemeteryBooking->cemetery ?? null;
-                            $plot = $booking->cemeteryBooking->plot ?? null;
-                        @endphp
+{{-- SECTION: Cemetery & Plot Details --}}
+<h5 class="mb-2 mt-4"><i class="bi bi-building"></i> Cemetery Details</h5>
+<dl class="row mb-4">
+    <dt class="col-sm-5 text-secondary">Cemetery Name</dt>
+    <dd class="col-sm-7">
+        {{ $cemeteryOwner?->name ?? 'Not specified' }}
+    </dd>
 
-                        <dt class="col-sm-5 text-secondary">Cemetery Name</dt>
-                        <dd class="col-sm-7">
-                            {{ $cemetery?->user->name ?? 'Not specified' }}
-                        </dd>
+    <dt class="col-sm-5 text-secondary">Cemetery Address</dt>
+    <dd class="col-sm-7">
+        {{ $plotCemetery?->address ?? 'Not specified' }}
+    </dd>
 
-                        <dt class="col-sm-5 text-secondary">Cemetery Address</dt>
-                        <dd class="col-sm-7">
-                            {{ $cemetery?->address ?? 'Not specified' }}
-                        </dd>
+    <dt class="col-sm-5 text-secondary">Plot Number</dt>
+    <dd class="col-sm-7">
+        @if($plot)
+            {{ $plot->plot_number ?? 'Not specified' }}
+        @else
+            <span class="text-warning">Waiting for assignment</span>
+        @endif
+    </dd>
 
-                        <dt class="col-sm-5 text-secondary">Plot Number</dt>
-                        <dd class="col-sm-7">
-                            @if($plot)
-                                {{ $plot->plot_number ?? 'Not specified' }}
-                            @else
-                                <span class="text-warning">Waiting for assignment</span>
-                            @endif
-                        </dd>
+    <dt class="col-sm-5 text-secondary">Section</dt>
+    <dd class="col-sm-7">
+        @if($plot)
+            {{ $plot->section ?? 'Not specified' }}
+        @else
+            <span class="text-warning">Waiting for assignment</span>
+        @endif
+    </dd>
 
-                        <dt class="col-sm-5 text-secondary">Section</dt>
-                        <dd class="col-sm-7">
-                            @if($plot)
-                                {{ $plot->section ?? 'Not specified' }}
-                            @else
-                                <span class="text-warning">Waiting for assignment</span>
-                            @endif
-                        </dd>
+    <dt class="col-sm-5 text-secondary">Block</dt>
+    <dd class="col-sm-7">
+        @if($plot)
+            {{ $plot->block ?? 'Not specified' }}
+        @else
+            <span class="text-warning">Waiting for assignment</span>
+        @endif
+    </dd>
+</dl>
 
-                        <dt class="col-sm-5 text-secondary">Block</dt>
-                        <dd class="col-sm-7">
-                            @if($plot)
-                                {{ $plot->block ?? 'Not specified' }}
-                            @else
-                                <span class="text-warning">Waiting for assignment</span>
-                            @endif
-                        </dd>
-                    </dl>
 
                         {{-- TIMELINE --}}
                         <h5 class="mb-2"><i class="bi bi-clock-history"></i> Timeline</h5>
@@ -546,7 +593,7 @@
                                 <strong>Last Updated:</strong>
                                 <span class="ms-1">{{ $booking->updated_at->format('M d, Y h:i A') }}</span>
                             </li>
-                            @if($booking->status === 'done')
+                            @if($booking->status === 'completed')
                             <li class="list-group-item">
                                 <strong>Completed On:</strong>
                                 <span class="ms-1">{{ $booking->updated_at->format('M d, Y h:i A') }}</span>

@@ -1,54 +1,64 @@
 <?php
-// Example: app/Http/Controllers/ClientDashboardController.php
+// app/Http/Controllers/CemeteryDashboardController.php
+
 namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Http\Request;
+use App\Models\Cemetery;
 use App\Models\Plot;
 use App\Models\CemeteryBooking;
 
-
 class CemeteryDashboardController extends Controller
 {
+    public function index()
+    {
+        $user = Auth::user();
 
-public function index()
-{
-    // Only allow cemetery users to access this dashboard
-    $user = Auth::user();
+        if ($user->role !== 'cemetery') {
+            abort(403, 'Unauthorized access.');
+        }
 
-    if ($user->role !== 'cemetery') {
-        abort(403, 'Unauthorized access.');
-        // Or: return redirect('/')->with('error', 'Unauthorized.');
+        // Get THIS user's cemetery
+        $cemetery = Cemetery::where('user_id', $user->id)->first();
+
+        if (!$cemetery) {
+            // No cemetery record assigned
+            return view('cemetery.dashboard', [
+                'cemeteryMissing' => true
+            ]);
+        }
+
+        $cemeteryId = $cemetery->id;
+
+        // Stats for ONLY this cemetery
+        $availablePlots = Plot::where('cemetery_id', $cemeteryId)->where('status', 'available')->count();
+        $reservedPlots  = Plot::where('cemetery_id', $cemeteryId)->where('status', 'reserved')->count();
+        $occupiedPlots  = Plot::where('cemetery_id', $cemeteryId)->where('status', 'occupied')->count();
+
+        $pendingBookings = CemeteryBooking::where('cemetery_id', $cemeteryId)
+            ->where('status', 'pending')->count();
+
+        $recentActivities = CemeteryBooking::with(['plot'])
+            ->where('cemetery_id', $cemeteryId)
+            ->latest('updated_at')
+            ->take(6)
+            ->get()
+            ->map(function ($booking) {
+                return (object)[
+                    'description' => 'Booking for Plot #' . optional($booking->plot)->plot_number
+                        . ' (' . ucfirst($booking->status) . ')',
+                    'created_at'  => $booking->updated_at,
+                ];
+            });
+
+        return view('cemetery.dashboard', [
+            'cemeteryMissing' => false,
+            'availablePlots' => $availablePlots,
+            'reservedPlots' => $reservedPlots,
+            'occupiedPlots' => $occupiedPlots,
+            'pendingBookings' => $pendingBookings,
+            'recentActivities' => $recentActivities,
+            'cemeteryName' => $cemetery->name ?? 'Your Cemetery'
+        ]);
     }
-
-    // The dashboard only shows counts for all data (since there's no cemetery_id)
-    $availablePlots = Plot::where('status', 'available')->count();
-    $reservedPlots  = Plot::where('status', 'reserved')->count();
-    $occupiedPlots  = Plot::where('status', 'occupied')->count();
-
-    $pendingBookings = CemeteryBooking::where('status', 'pending')->count();
-
-    // Recent activity: last 6 bookings (all statuses)
-    $recentActivities = CemeteryBooking::with(['plot'])
-        ->latest('updated_at')
-        ->take(6)
-        ->get()
-        ->map(function ($booking) {
-            return (object)[
-                'description' => 'Booking for Plot #' . optional($booking->plot)->plot_number
-                    . ' (' . ucfirst($booking->status) . ')',
-                'created_at'  => $booking->updated_at,
-            ];
-        });
-
-    return view('cemetery.dashboard', compact(
-        'availablePlots',
-        'reservedPlots',
-        'occupiedPlots',
-        'pendingBookings',
-        'recentActivities'
-    ));
 }
-
-}
-

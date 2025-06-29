@@ -21,7 +21,7 @@ class CemeteryNotificationController extends Controller
         // Optionally paginate
         $notifications = $user->notifications()->latest()->paginate(20);
 
-        return view('cemetery.notifications.index', [
+        return view('notifications.index', [
             'notifications' => $notifications,
         ]);
     }

@@ -4,8 +4,8 @@ namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Notifications\Messages\MailMessage;
 
 class CemeteryBookingApproved extends Notification implements ShouldQueue
 {
@@ -38,14 +38,37 @@ class CemeteryBookingApproved extends Notification implements ShouldQueue
      */
     public function toMail($notifiable): MailMessage
     {
+        // Pick booking view route by role (if provided)
+        $role = $this->notifData['role'] ?? ($notifiable->role ?? null);
+        $bookingId = $this->notifData['booking_id'] ?? null;
+
+        if ($role === 'funeral') {
+            $url = route('funeral.bookings.show', $bookingId);
+        } elseif ($role === 'agent') {
+            $url = route('agent.bookings.show', $bookingId);
+        } else {
+            $url = route('client.bookings.show', $bookingId);
+        }
+
+        // Message content
+        $client = $this->notifData['client_name'] ?? 'Client';
+        $cemetery = $this->notifData['cemetery_name'] ?? 'Cemetery';
+        $plot = $this->notifData['plot_number'] ?? 'N/A';
+
+        $line1 = match ($role) {
+            'client'  => "Dear <b>{$client}</b>, your cemetery booking at <b>{$cemetery}</b> has been approved and plot <b>#{$plot}</b> assigned.",
+            'funeral' => "A cemetery booking for <b>{$client}</b> at <b>{$cemetery}</b> has been approved. Plot assigned: <b>#{$plot}</b>.",
+            'agent'   => "Your client <b>{$client}</b> had a cemetery booking approved at <b>{$cemetery}</b>. Plot assigned: <b>#{$plot}</b>.",
+            default   => "Your cemetery booking has been approved and a plot assigned."
+        };
+
         return (new MailMessage)
             ->subject('Cemetery Booking Approved')
             ->greeting('Hello!')
-            ->line('Your cemetery booking has been approved and a plot has been assigned to you.')
-            ->line('Booking ID: ' . ($this->notifData['booking_id'] ?? ''))
-            ->line('Plot Number: ' . ($this->notifData['plot_number'] ?? ''))
-            ->action('View Booking', url('/client/dashboard'))
-            ->line('Thank you for using EternaLink!');
+            ->line(strip_tags($line1))
+            ->action('View Booking', $url)
+            ->line('Thank you for using EternaLink!')
+->salutation('Regards,<br>EternaLink');
     }
 
     /**
@@ -55,11 +78,38 @@ class CemeteryBookingApproved extends Notification implements ShouldQueue
      */
     public function toArray($notifiable): array
     {
+        $role = $this->notifData['role'] ?? ($notifiable->role ?? null);
+        $client = $this->notifData['client_name'] ?? 'Client';
+        $cemetery = $this->notifData['cemetery_name'] ?? 'Cemetery';
+        $plot = $this->notifData['plot_number'] ?? 'N/A';
+
+        $message = match ($role) {
+            'client'  => "Dear <b>{$client}</b>, your cemetery booking at <b>{$cemetery}</b> has been <b>APPROVED</b> and plot <b>#{$plot}</b> assigned.",
+            'funeral' => "A cemetery booking for <b>{$client}</b> at <b>{$cemetery}</b> has been <b>APPROVED</b>. Plot assigned: <b>#{$plot}</b>.",
+            'agent'   => "Your client <b>{$client}</b> had a cemetery booking approved at <b>{$cemetery}</b>. Plot assigned: <b>#{$plot}</b>.",
+            default   => "Your cemetery booking has been approved and a plot assigned.",
+        };
+
+        // Use the correct route for database notification
+        $bookingId = $this->notifData['booking_id'] ?? null;
+        if ($role === 'funeral') {
+            $url = route('funeral.bookings.show', $bookingId);
+        } elseif ($role === 'agent') {
+            $url = route('agent.bookings.show', $bookingId);
+        } else {
+            $url = route('client.bookings.show', $bookingId);
+        }
+
         return [
-            'title' => $this->notifData['title'] ?? 'Cemetery Booking Approved',
-            'message' => $this->notifData['message'] ?? 'Your cemetery booking has been approved and a plot assigned.',
-            'booking_id' => $this->notifData['booking_id'] ?? null,
-            'plot_number' => $this->notifData['plot_number'] ?? null,
+            'title'         => $this->notifData['title'] ?? 'Cemetery Booking Approved',
+            'message'       => $message,
+            'booking_id'    => $bookingId,
+            'plot_number'   => $plot,
+            'client_name'   => $client,
+            'cemetery_name' => $cemetery,
+            'role'          => $role,
+            'url'           => $url,
         ];
     }
 }
+        

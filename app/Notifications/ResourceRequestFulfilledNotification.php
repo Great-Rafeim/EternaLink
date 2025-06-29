@@ -76,7 +76,8 @@ class ResourceRequestFulfilledNotification extends Notification implements Shoul
         }
 
         $mail->action('View Request', url('/funeral/resource-requests/' . $this->resourceRequest->id))
-            ->line('Thank you for using EternaLink!');
+            ->line('Thank you for using EternaLink!')
+->salutation('Regards,<br>EternaLink');
 
         return $mail;
     }

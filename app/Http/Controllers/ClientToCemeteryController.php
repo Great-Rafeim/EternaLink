@@ -57,19 +57,16 @@ public function booking($userId)
     return view('client.cemeteries.booking', compact('user', 'cemetery', 'bookings', 'ownedPlots', 'bookingDetails'));
 }
 
-
-public function submitBooking(Request $request, $userId)
+public function submitBooking(Request $request, $cemeteryUserId)
 {
-    \Log::info('[DEBUG] submitBooking started.', ['userId' => $userId, 'request' => $request->all()]);
+    \Log::info('[DEBUG] submitBooking called.', [
+        'auth_user_id'    => auth()->id(),
+        'cemeteryUserId'  => $cemeteryUserId,
+        'request'         => $request->all(),
+    ]);
 
     try {
-        $user = User::where('id', $userId)->where('role', 'cemetery')->firstOrFail();
-        \Log::info('[DEBUG] Cemetery user found.', ['cemetery_user' => $user->id]);
-
-        $cemetery = $user->cemetery;
-        \Log::info('[DEBUG] Cemetery loaded.', ['cemetery' => $cemetery ? $cemetery->id : null]);
-
-        // Validation
+        // 1. Validate input
         $validated = $request->validate([
             'booking_id'              => 'required|exists:bookings,id',
             'casket_size'             => 'required|string|max:100',
@@ -78,13 +75,26 @@ public function submitBooking(Request $request, $userId)
             'burial_permit'           => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
             'construction_permit'     => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
             'has_plot'                => 'required|in:0,1',
-            'proof_of_purchase'       => 'required_if:has_plot,1|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'proof_of_purchase'       => 'required_if:has_plot,1|file|mimes:pdf,jpg,jpeg,png|max:20480',
         ], [
             'proof_of_purchase.required_if' => 'Proof of purchase is required if you already own a plot.',
         ]);
         \Log::info('[DEBUG] Validation passed.', ['validated' => $validated]);
 
-        // Upload files and save paths
+        // 2. Find the selected cemetery user
+        $cemeteryUser = \App\Models\User::where('id', $cemeteryUserId)
+            ->where('role', 'cemetery')
+            ->with('cemetery')
+            ->first();
+
+        if (!$cemeteryUser || !$cemeteryUser->cemetery) {
+            \Log::warning('[DEBUG] Cemetery user or cemetery model not found.', [
+                'cemeteryUserId' => $cemeteryUserId
+            ]);
+            return back()->withErrors(['error' => 'Cemetery or user not found.']);
+        }
+
+        // 3. Upload files and save paths
         $death_certificate_path    = $request->file('death_certificate')->store('cemetery_documents', 'public');
         $burial_permit_path       = $request->file('burial_permit')->store('cemetery_documents', 'public');
         $construction_permit_path = $request->file('construction_permit')->store('cemetery_documents', 'public');
@@ -92,17 +102,17 @@ public function submitBooking(Request $request, $userId)
         if ($request->hasFile('proof_of_purchase')) {
             $proof_of_purchase_path = $request->file('proof_of_purchase')->store('cemetery_documents', 'public');
         }
-        \Log::info('[DEBUG] File upload complete.', [
+        \Log::info('[DEBUG] Files uploaded.', [
             'death_certificate_path'    => $death_certificate_path,
             'burial_permit_path'        => $burial_permit_path,
             'construction_permit_path'  => $construction_permit_path,
             'proof_of_purchase_path'    => $proof_of_purchase_path,
         ]);
 
-        // Save booking (new columns, no plot_id, stores file paths)
-        $cemeteryBooking = CemeteryBooking::create([
+        // 4. Create the cemetery booking with real data
+        $cemeteryBooking = \App\Models\CemeteryBooking::create([
             'user_id'                  => auth()->id(),
-            'cemetery_id'              => $cemetery->id,
+            'cemetery_id'              => $cemeteryUser->cemetery->id,
             'booking_id'               => $request->booking_id,
             'casket_size'              => $request->casket_size,
             'interment_date'           => $request->interment_date,
@@ -112,43 +122,127 @@ public function submitBooking(Request $request, $userId)
             'construction_permit_path' => $construction_permit_path,
             'proof_of_purchase_path'   => $proof_of_purchase_path,
         ]);
-        \Log::info('[DEBUG] CemeteryBooking created.', ['cemeteryBooking_id' => $cemeteryBooking->id]);
 
-        // Notify cemetery user (owner)
-        $cemeteryUser = $user;
-        $cemeteryUser->notify((new CemeteryBookingSubmitted($cemeteryBooking))->onQueue('notifications'));
-        \Log::info('[DEBUG] Notified cemetery user.', ['cemetery_user_id' => $cemeteryUser->id]);
+        \Log::info('[DEBUG] CemeteryBooking created.', [
+            'cemeteryBooking_id' => $cemeteryBooking->id,
+            'cemetery_id'        => $cemeteryUser->cemetery->id,
+            'booking_id'         => $request->booking_id,
+        ]);
 
-        // Notify agent assigned to the funeral booking (from booking_agents)
-        $bookingAgent = \DB::table('booking_agents')
-            ->where('booking_id', $request->booking_id)
-            ->whereNotNull('agent_user_id')
-            ->orderByDesc('id')
-            ->first();
+        // 5. Notify the cemetery user (owner)
+        $cemeteryUser->notify(new \App\Notifications\CemeteryBookingSubmitted($cemeteryBooking->id));
+        \Log::info('[DEBUG] Notification sent to cemetery user.', [
+            'cemetery_user_id' => $cemeteryUser->id
+        ]);
 
-        if ($bookingAgent && $bookingAgent->agent_user_id) {
-            $agent = User::find($bookingAgent->agent_user_id);
-            if ($agent) {
-                $agent->notify((new CemeteryBookingAgentNotify($cemeteryBooking))->onQueue('notifications'));
-                \Log::info('[DEBUG] Notified agent.', ['agent_user_id' => $agent->id]);
-            } else {
-                \Log::warning('[DEBUG] Agent not found for booking.', ['booking_agent_id' => $bookingAgent->id]);
-            }
+        // 6. Notify the agent assigned to the funeral booking (if any)
+        $agentUser = $cemeteryBooking->actualAgentUser();
+        if ($agentUser) {
+            $agentUser->notify(new \App\Notifications\CemeteryBookingAgentNotify($cemeteryBooking));
+            \Log::info('[DEBUG] Notification sent to agent user.', [
+                'agent_user_id' => $agentUser->id,
+                'agent_email'   => $agentUser->email,
+            ]);
         } else {
-            \Log::info('[DEBUG] No agent to notify for booking.', ['booking_id' => $request->booking_id]);
+            \Log::info('[DEBUG] No agent user found to notify for this cemetery booking.', [
+                'cemeteryBooking_id' => $cemeteryBooking->id
+            ]);
         }
 
         return redirect()->route('client.cemeteries.index')
-            ->with('success', 'Cemetery booking submitted!');
+            ->with('success', 'Cemetery booking submitted! Notifications sent.');
 
     } catch (\Throwable $e) {
         \Log::error('[ERROR] submitBooking failed.', [
             'exception' => $e->getMessage(),
             'trace'     => $e->getTraceAsString(),
         ]);
-        return back()->withErrors('A server error occurred. Please try again or contact support.');
+        return back()->withErrors(['error' => 'A server error occurred. Please try again or contact support.']);
     }
 }
+
+
+
+/*
+public function submitBooking(Request $request, $cemeteryUserId)
+{
+    \Log::info('[DEBUG] submitBooking called.', [
+        'auth_user_id'    => auth()->id(),
+        'cemeteryUserId'  => $cemeteryUserId,
+        'request'         => $request->all(),
+    ]);
+
+    try {
+        // 1. Find the selected cemetery user and their cemetery model
+        $cemeteryUser = \App\Models\User::where('id', $cemeteryUserId)
+            ->where('role', 'cemetery')
+            ->with('cemetery')
+            ->first();
+
+        if (!$cemeteryUser || !$cemeteryUser->cemetery) {
+            \Log::warning('[DEBUG] Cemetery user or cemetery model not found.', [
+                'cemeteryUserId' => $cemeteryUserId
+            ]);
+            return response()->json(['error' => 'Cemetery or user not found.'], 404);
+        }
+
+        // 2. Set funeral booking_id to 5 (for test/dummy mode)
+        $booking_id = 5;
+
+        // 3. Create the new cemetery booking
+        $cemeteryBooking = \App\Models\CemeteryBooking::create([
+            'user_id'                  => auth()->id(),
+            'cemetery_id'              => $cemeteryUser->cemetery->id,
+            'booking_id'               => $booking_id,
+            'casket_size'              => 'Standard (dummy)',
+            'interment_date'           => now()->addDays(3),
+            'status'                   => 'pending',
+            'death_certificate_path'   => 'dummy/path/death.pdf',
+            'burial_permit_path'       => 'dummy/path/burial.pdf',
+            'construction_permit_path' => 'dummy/path/construction.pdf',
+            'proof_of_purchase_path'   => 'dummy/path/purchase.pdf',
+        ]);
+
+        \Log::info('[DEBUG] CemeteryBooking created.', [
+            'cemeteryBooking_id' => $cemeteryBooking->id,
+            'cemetery_id'        => $cemeteryUser->cemetery->id,
+            'booking_id'         => $booking_id,
+        ]);
+
+        // 4. Notify the cemetery user (owner)
+        $cemeteryUser->notify(new \App\Notifications\CemeteryBookingSubmitted($cemeteryBooking->id));
+        \Log::info('[DEBUG] Notification sent to cemetery user.', [
+            'cemetery_user_id' => $cemeteryUser->id
+        ]);
+
+        // 5. Notify the agent assigned to the funeral booking (if any)
+        $agentUser = $cemeteryBooking->actualAgentUser();
+        if ($agentUser) {
+            $agentUser->notify(new \App\Notifications\CemeteryBookingAgentNotify($cemeteryBooking));
+            \Log::info('[DEBUG] Notification sent to agent user.', [
+                'agent_user_id' => $agentUser->id,
+                'agent_email'   => $agentUser->email,
+            ]);
+        } else {
+            \Log::info('[DEBUG] No agent user found to notify for this cemetery booking.', [
+                'cemeteryBooking_id' => $cemeteryBooking->id
+            ]);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Notifications sent.']);
+
+    } catch (\Throwable $e) {
+        \Log::error('[ERROR] submitBooking failed.', [
+            'exception' => $e->getMessage(),
+            'trace'     => $e->getTraceAsString(),
+        ]);
+        return response()->json(['error' => 'Server error.'], 500);
+    }
+}
+*/
+
+
+
 
 public function cancelCemeteryBooking($id)
 {

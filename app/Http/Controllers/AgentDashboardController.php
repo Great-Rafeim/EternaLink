@@ -47,16 +47,14 @@ public function show(Booking $booking)
         abort(403, 'Unauthorized');
     }
 
-    // Eager load relationships, including cemeteryBooking, plot, and cemetery.user
+    // Eager load relationships (other relations unchanged)
     $booking->load([
         'package.items.category',
         'client',
         'funeralHome',
         'agent',
         'bookingAgent.agentUser',
-        // Cemetery-related relationships for display:
-        'cemeteryBooking.cemetery.user',
-        'cemeteryBooking.plot',
+        // Not using cemeteryBooking for plot/cemetery display!
     ]);
 
     $packageItems = $booking->package->items->map(function($item) {
@@ -84,13 +82,30 @@ public function show(Booking $booking)
         ->orderBy('created_at', 'desc')
         ->get();
 
-    // Now you can use $booking->cemeteryBooking (with cemetery, user, and plot) in your view!
+    // Find assigned plot via booking_details (same logic as in funeral controller)
+    $bookingDetail = \App\Models\BookingDetail::where('booking_id', $booking->id)->first();
+    $plot = null;
+    $plotCemetery = null;
+    $cemeteryOwner = null;
+
+    if ($bookingDetail && $bookingDetail->plot_id) {
+        $plot = \App\Models\Plot::with('cemetery.user')->find($bookingDetail->plot_id);
+        if ($plot) {
+            $plotCemetery = $plot->cemetery;
+            $cemeteryOwner = $plotCemetery?->user;
+        }
+    }
+
+    // Now you can use $plot, $plotCemetery, $cemeteryOwner in your view!
     return view('agent.bookings.show', compact(
         'booking',
         'packageItems',
         'assetCategories',
         'bookingAgent',
-        'serviceLogs'
+        'serviceLogs',
+        'plot',
+        'plotCemetery',
+        'cemeteryOwner'
     ));
 }
 
@@ -335,131 +350,160 @@ public function show(Booking $booking)
         ]);
     }
 
-    public function updateInfo(Request $request, $bookingId)
-    {
-        $booking = \App\Models\Booking::with(['detail', 'package.items', 'customizedPackage', 'client', 'funeralHome'])->findOrFail($bookingId);
+public function updateInfo(Request $request, $bookingId)
+{
+    $booking = \App\Models\Booking::with(['detail', 'package.items', 'customizedPackage', 'client', 'funeralHome'])->findOrFail($bookingId);
 
-        $agentId = auth()->id();
-        $isAssignedAgent = $booking->agent_user_id === $agentId
-            || ($booking->bookingAgent && $booking->bookingAgent->agent_user_id === $agentId);
-        if (auth()->user()->role !== 'agent' || !$isAssignedAgent) {
-            abort(403, 'Unauthorized access');
-        }
-
-        $validated = $request->validate([
-            // A. Deceased Personal Details
-            'deceased_first_name'        => 'required|string|max:100',
-            'deceased_middle_name'       => 'nullable|string|max:100',
-            'deceased_last_name'         => 'required|string|max:100',
-            'deceased_nickname'          => 'nullable|string|max:100',
-            'deceased_residence'         => 'nullable|string|max:255',
-            'deceased_sex'               => 'required|in:M,F',
-            'deceased_civil_status'      => 'required|string|max:30',
-            'deceased_birthday'          => 'nullable|date',
-            'deceased_age'               => 'nullable|integer',
-            'deceased_date_of_death'     => 'nullable|date',
-            'deceased_religion'          => 'nullable|string|max:50',
-            'deceased_occupation'        => 'nullable|string|max:100',
-            'deceased_citizenship'       => 'nullable|string|max:50',
-            'deceased_time_of_death'     => 'nullable|string|max:30',
-            'deceased_cause_of_death'    => 'nullable|string|max:255',
-            'deceased_place_of_death'    => 'nullable|string|max:255',
-            'deceased_father_first_name' => 'nullable|string|max:100',
-            'deceased_father_middle_name'=> 'nullable|string|max:100',
-            'deceased_father_last_name'  => 'nullable|string|max:100',
-            'deceased_mother_first_name' => 'nullable|string|max:100',
-            'deceased_mother_middle_name'=> 'nullable|string|max:100',
-            'deceased_mother_last_name'  => 'nullable|string|max:100',
-            'corpse_disposal'            => 'nullable|string|max:100',
-            'interment_cremation_date'   => 'nullable|date',
-            'interment_cremation_time'   => 'nullable|string|max:30',
-            'cemetery_or_crematory'      => 'nullable|string|max:255',
-
-            // B. Documents
-            'death_cert_registration_no'     => 'nullable|string|max:100',
-            'death_cert_released_to'         => 'nullable|string|max:100',
-            'death_cert_released_date'       => 'nullable|date',
-            'death_cert_released_signature'  => 'nullable|string',
-            'funeral_contract_no'            => 'nullable|string|max:100',
-            'funeral_contract_released_to'   => 'nullable|string|max:100',
-            'funeral_contract_released_date' => 'nullable|date',
-            'funeral_contract_released_signature'=> 'nullable|string',
-            'official_receipt_no'            => 'nullable|string|max:100',
-            'official_receipt_released_to'   => 'nullable|string|max:100',
-            'official_receipt_released_date' => 'nullable|date',
-            'official_receipt_released_signature'=> 'nullable|string',
-
-            // C. Informant Details
-            'informant_name'             => 'nullable|string|max:100',
-            'informant_age'              => 'nullable|integer',
-            'informant_civil_status'     => 'nullable|string|max:30',
-            'informant_relationship'     => 'nullable|string|max:50',
-            'informant_contact_no'       => 'nullable|string|max:30',
-            'informant_address'          => 'nullable|string|max:255',
-
-            // D. Service, Amount, Fees
-            'amount'     => 'nullable|string|max:100',
-            'other_fee'  => 'nullable|string|max:100',
-            'deposit'    => 'nullable|string|max:100',
-            'cswd'       => 'nullable|string|max:50',
-            'dswd'       => 'nullable|string|max:50',
-            'remarks'    => 'nullable|string|max:255',
-
-            // E. Certification
-            'certifier_name'          => 'nullable|string|max:100',
-            'certifier_relationship'  => 'nullable|string|max:50',
-            'certifier_residence'     => 'nullable|string|max:255',
-            'certifier_amount'        => 'nullable|string|max:255',
-            'certifier_signature'     => 'nullable|string|max:255',
-            'certifier_signature_image'=> 'nullable|string',
-        ]);
-
-        $serviceName = $booking->package->name ?? '';
-        if ($booking->customizedPackage && $booking->customizedPackage->status === 'approved') {
-            $totalAmount = $booking->customizedPackage->custom_total_price;
-        } elseif ($booking->package) {
-            $totalAmount = $booking->package->items->sum(function ($item) {
-                return ($item->pivot->quantity ?? 1) * ($item->selling_price ?? $item->price ?? 0);
-            });
-        } else {
-            $totalAmount = 0;
-        }
-
-        $detail = $booking->detail ?: new \App\Models\BookingDetail(['booking_id' => $booking->id]);
-        $detail->fill($validated);
-
-        $detail->service = $serviceName;
-        $detail->amount = $validated['amount'] ?? 0;
-        $detail->booking_id = $booking->id;
-
-        $detail->death_cert_released_signature         = $validated['death_cert_released_signature'] ?? null;
-        $detail->funeral_contract_released_signature   = $validated['funeral_contract_released_signature'] ?? null;
-        $detail->official_receipt_released_signature   = $validated['official_receipt_released_signature'] ?? null;
-        $detail->certifier_signature_image             = $validated['certifier_signature_image'] ?? null;
-
-        $detail->save();
-
-        if ($booking->client) {
-            $agentName = auth()->user()->name;
-            $message = "Your assigned agent ({$agentName}) has updated the information for your booking #{$booking->id}.";
-            $booking->client->notify(
-                new \App\Notifications\BookingStatusChanged($booking, $message)
-            );
-        }
-
-        if ($booking->funeralHome) {
-            $agentName = auth()->user()->name;
-            $clientName = $booking->client->name ?? 'the client';
-            $message = "Agent ({$agentName}) updated the details for Booking #{$booking->id} on behalf of {$clientName}.";
-            $booking->funeralHome->notify(
-                new \App\Notifications\BookingStatusChanged($booking, $message)
-            );
-        }
-
-        return redirect()
-            ->route('agent.bookings.show', $booking->id)
-            ->with('success', 'Personal & service details have been updated for this booking.');
+    $agentId = auth()->id();
+    $isAssignedAgent = $booking->agent_user_id === $agentId
+        || ($booking->bookingAgent && $booking->bookingAgent->agent_user_id === $agentId);
+    if (auth()->user()->role !== 'agent' || !$isAssignedAgent) {
+        abort(403, 'Unauthorized access');
     }
+
+    $detail = $booking->detail ?: new \App\Models\BookingDetail(['booking_id' => $booking->id]);
+    $hasExistingImage = $detail && $detail->deceased_image;
+
+    // Validation: image is required if there is not yet an image; else nullable.
+    $validated = $request->validate([
+        // A. Deceased Personal Details
+        'deceased_first_name'        => 'required|string|max:100',
+        'deceased_middle_name'       => 'nullable|string|max:100',
+        'deceased_last_name'         => 'required|string|max:100',
+        'deceased_nickname'          => 'nullable|string|max:100',
+        'deceased_residence'         => 'nullable|string|max:255',
+        'deceased_sex'               => 'required|in:M,F',
+        'deceased_civil_status'      => 'required|string|max:30',
+        'deceased_birthday'          => 'nullable|date',
+        'deceased_age'               => 'nullable|integer',
+        'deceased_date_of_death'     => 'nullable|date',
+        'deceased_religion'          => 'nullable|string|max:50',
+        'deceased_occupation'        => 'nullable|string|max:100',
+        'deceased_citizenship'       => 'nullable|string|max:50',
+        'deceased_time_of_death'     => 'nullable|string|max:30',
+        'deceased_cause_of_death'    => 'nullable|string|max:255',
+        'deceased_place_of_death'    => 'nullable|string|max:255',
+        'deceased_father_first_name' => 'nullable|string|max:100',
+        'deceased_father_middle_name'=> 'nullable|string|max:100',
+        'deceased_father_last_name'  => 'nullable|string|max:100',
+        'deceased_mother_first_name' => 'nullable|string|max:100',
+        'deceased_mother_middle_name'=> 'nullable|string|max:100',
+        'deceased_mother_last_name'  => 'nullable|string|max:100',
+        'corpse_disposal'            => 'nullable|string|max:100',
+        'interment_cremation_date'   => 'nullable|date',
+        'interment_cremation_time'   => 'nullable|string|max:30',
+        'cemetery_or_crematory'      => 'nullable|string|max:255',
+
+        // Deceased image
+        'deceased_image'             => [
+            $hasExistingImage ? 'nullable' : 'required',
+            'image',
+            'max:20480'
+        ],
+
+        // B. Documents
+        'death_cert_registration_no'     => 'nullable|string|max:100',
+        'death_cert_released_to'         => 'nullable|string|max:100',
+        'death_cert_released_date'       => 'nullable|date',
+        'death_cert_released_signature'  => 'nullable|string',
+        'funeral_contract_no'            => 'nullable|string|max:100',
+        'funeral_contract_released_to'   => 'nullable|string|max:100',
+        'funeral_contract_released_date' => 'nullable|date',
+        'funeral_contract_released_signature'=> 'nullable|string',
+        'official_receipt_no'            => 'nullable|string|max:100',
+        'official_receipt_released_to'   => 'nullable|string|max:100',
+        'official_receipt_released_date' => 'nullable|date',
+        'official_receipt_released_signature'=> 'nullable|string',
+
+        // C. Informant Details
+        'informant_name'             => 'nullable|string|max:100',
+        'informant_age'              => 'nullable|integer',
+        'informant_civil_status'     => 'nullable|string|max:30',
+        'informant_relationship'     => 'nullable|string|max:50',
+        'informant_contact_no'       => 'nullable|string|max:30',
+        'informant_address'          => 'nullable|string|max:255',
+
+        // D. Service, Amount, Fees
+        'amount'     => 'nullable|string|max:100',
+        'other_fee'  => 'nullable|string|max:100',
+        'deposit'    => 'nullable|string|max:100',
+        'cswd'       => 'nullable|string|max:50',
+        'dswd'       => 'nullable|string|max:50',
+        'remarks'    => 'nullable|string|max:255',
+
+        // E. Certification
+        'certifier_name'          => 'nullable|string|max:100',
+        'certifier_relationship'  => 'nullable|string|max:50',
+        'certifier_residence'     => 'nullable|string|max:255',
+        'certifier_amount'        => 'nullable|string|max:255',
+        'certifier_signature'     => 'nullable|string|max:255',
+        'certifier_signature_image'=> 'nullable|string',
+        'remove_deceased_image'   => 'nullable|in:0,1'
+    ]);
+
+    $serviceName = $booking->package->name ?? '';
+    if ($booking->customizedPackage && $booking->customizedPackage->status === 'approved') {
+        $totalAmount = $booking->customizedPackage->custom_total_price;
+    } elseif ($booking->package) {
+        $totalAmount = $booking->package->items->sum(function ($item) {
+            return ($item->pivot->quantity ?? 1) * ($item->selling_price ?? $item->price ?? 0);
+        });
+    } else {
+        $totalAmount = 0;
+    }
+
+    $detail->fill($validated);
+    $detail->service = $serviceName;
+    $detail->amount = $validated['amount'] ?? 0;
+    $detail->booking_id = $booking->id;
+    $detail->death_cert_released_signature         = $validated['death_cert_released_signature'] ?? null;
+    $detail->funeral_contract_released_signature   = $validated['funeral_contract_released_signature'] ?? null;
+    $detail->official_receipt_released_signature   = $validated['official_receipt_released_signature'] ?? null;
+    $detail->certifier_signature_image             = $validated['certifier_signature_image'] ?? null;
+
+    // --- Handle Deceased Image Upload ---
+    if ($request->input('remove_deceased_image') === '1') {
+        // Remove the image if requested
+        if ($detail->deceased_image && \Storage::disk('public')->exists($detail->deceased_image)) {
+            \Storage::disk('public')->delete($detail->deceased_image);
+        }
+        $detail->deceased_image = null;
+    } elseif ($request->hasFile('deceased_image')) {
+        // Delete old image first (if exists)
+        if ($detail->deceased_image && \Storage::disk('public')->exists($detail->deceased_image)) {
+            \Storage::disk('public')->delete($detail->deceased_image);
+        }
+        $path = $request->file('deceased_image')->store('deceased_images', 'public');
+        $detail->deceased_image = $path;
+    }
+    // If not removing and no new upload, keep old image.
+
+    $detail->save();
+
+    // Notify client
+    if ($booking->client) {
+        $agentName = auth()->user()->name;
+        $message = "Your assigned agent ({$agentName}) has updated the information for your booking #{$booking->id}.";
+        $booking->client->notify(
+            new \App\Notifications\BookingStatusChanged($booking, $message)
+        );
+    }
+
+    // Notify funeral home
+    if ($booking->funeralHome) {
+        $agentName = auth()->user()->name;
+        $clientName = $booking->client->name ?? 'the client';
+        $message = "Agent ({$agentName}) updated the details for Booking #{$booking->id} on behalf of {$clientName}.";
+        $booking->funeralHome->notify(
+            new \App\Notifications\BookingStatusChanged($booking, $message)
+        );
+    }
+
+    return redirect()
+        ->route('agent.bookings.show', $booking->id)
+        ->with('success', 'Personal & service details have been updated for this booking.');
+}
+
 
     public function editCustomization($bookingId)
     {

@@ -44,7 +44,7 @@
                                                     <th>Agent</th>
                                                     <th>Status</th>
                                                     <th>Requested On</th>
-                                                    <th>Main Action</th>
+                                                    <th>Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -202,7 +202,7 @@
                             <th>Casket Size</th>
                             <th>Interment Date</th>
                             <th>Status</th>
-                            <th>Main Action</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>

@@ -40,7 +40,7 @@ public function index(Request $request)
     // Status filter
     $status = $request->input('status', 'active');
     if ($status === 'active') {
-        $query->whereIn('status', ['reserved', 'in_use']);
+        $query->whereIn('status', ['reserved', 'in_use', 'for_return']);
     } elseif ($status !== 'all') {
         $query->where('status', $status);
     }
@@ -124,7 +124,7 @@ public function cancel(Request $request, AssetReservation $reservation)
         }
 
         DB::transaction(function () use ($reservation) {
-            $reservation->status = 'completed';
+            $reservation->status = 'for_return';
             $reservation->reserved_end = now();
             $reservation->save();
             // NO inventory update yet!
@@ -143,7 +143,7 @@ public function cancel(Request $request, AssetReservation $reservation)
         if (!$isProvider) {
             abort(403);
         }
-        if ($reservation->status !== 'completed') {
+        if ($reservation->status !== 'for_return') {
             return back()->with('error', 'Asset must be returned first.');
         }
 

@@ -54,12 +54,14 @@ class ResourceRequestCancelledNotification extends Notification implements Shoul
             return (new MailMessage)
                 ->subject('Request Cancelled')
                 ->line("The request for $item from {$this->resourceRequest->requester->name} was cancelled by the requester.")
-                ->action('View Request', $url);
+                ->action('View Request', $url)
+                ->salutation('Regards,<br>EternaLink');
         } else {
             return (new MailMessage)
                 ->subject('You Cancelled Your Request')
                 ->line("You have cancelled your request for $item.")
-                ->action('View Request', $url);
+                ->action('View Request', $url)
+                ->salutation('Regards,<br>EternaLink');
         }
     }
 }

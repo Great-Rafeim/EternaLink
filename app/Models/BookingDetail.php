@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Hashidable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class BookingDetail extends Model
@@ -12,6 +13,8 @@ class BookingDetail extends Model
     protected $fillable = [
         'booking_id',
         // Deceased Personal Details
+            'deceased_image',
+
         'deceased_first_name',
         'deceased_middle_name',
         'deceased_last_name',

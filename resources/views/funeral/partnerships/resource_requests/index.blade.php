@@ -45,17 +45,17 @@
                                     <i class="bi bi-send"></i> Requests I Sent
                                 </div>
                                 <div class="card-body bg-gradient-dark text-white rounded-bottom-4">
-                                    @php
-                                        $sent = $sentRequests->filter(fn($r) => in_array($r->status, ['pending','approved']));
-                                        if (request('search')) {
-                                            $sent = $sent->filter(function($r) {
-                                                $needle = strtolower(request('search'));
-                                                return str_contains(strtolower($r->requestedItem->name ?? ''), $needle)
-                                                    || str_contains(strtolower($r->provider->name ?? ''), $needle)
-                                                    || str_contains(strtolower($r->status), $needle);
-                                            });
-                                        }
-                                    @endphp
+@php
+    $sent = $sentRequestsActive;
+    if (request('search')) {
+        $sent = $sent->filter(function($r) {
+            $needle = strtolower(request('search'));
+            return str_contains(strtolower($r->requestedItem->name ?? ''), $needle)
+                || str_contains(strtolower($r->provider->name ?? ''), $needle)
+                || str_contains(strtolower($r->status), $needle);
+        });
+    }
+@endphp
                                     @if($sent->isEmpty())
                                         <div class="alert alert-info mb-0">No pending or active requests sent.</div>
                                     @else
@@ -63,7 +63,6 @@
                                             <table class="table table-hover align-middle table-dark table-striped mb-0">
                                                 <thead class="table-light text-dark">
                                                     <tr>
-                                                        
                                                         <th>To</th>
                                                         <th>Item</th>
                                                         <th>Qty</th>
@@ -79,7 +78,6 @@
                                                         $isAsset = $request->providerItem && $request->providerItem->category && $request->providerItem->category->is_asset;
                                                     @endphp
                                                     <tr class="align-middle">
-                                                        
                                                         <td>{{ $request->provider->name ?? '-' }}</td>
                                                         <td>
                                                             <span class="fw-semibold">{{ $request->requestedItem->name ?? '-' }}</span>
@@ -170,17 +168,17 @@
                                     <i class="bi bi-box-arrow-in-down"></i> Requests to Me
                                 </div>
                                 <div class="card-body bg-gradient-dark text-white rounded-bottom-4">
-                                    @php
-                                        $received = $receivedRequests->filter(fn($r) => in_array($r->status, ['pending','approved']));
-                                        if (request('search')) {
-                                            $received = $received->filter(function($r) {
-                                                $needle = strtolower(request('search'));
-                                                return str_contains(strtolower($r->providerItem->name ?? ''), $needle)
-                                                    || str_contains(strtolower($r->requester->name ?? ''), $needle)
-                                                    || str_contains(strtolower($r->status), $needle);
-                                            });
-                                        }
-                                    @endphp
+@php
+    $received = $receivedRequestsActive;
+    if (request('search')) {
+        $received = $received->filter(function($r) {
+            $needle = strtolower(request('search'));
+            return str_contains(strtolower($r->providerItem->name ?? ''), $needle)
+                || str_contains(strtolower($r->requester->name ?? ''), $needle)
+                || str_contains(strtolower($r->status), $needle);
+        });
+    }
+@endphp
                                     @if($received->isEmpty())
                                         <div class="alert alert-info mb-0">No pending or active requests to you.</div>
                                     @else
@@ -188,7 +186,6 @@
                                             <table class="table table-hover align-middle table-dark table-striped mb-0">
                                                 <thead class="table-light text-dark">
                                                     <tr>
-                                                        
                                                         <th>From</th>
                                                         <th>Item</th>
                                                         <th>Qty</th>
@@ -204,7 +201,6 @@
                                                         $isAsset = $request->providerItem && $request->providerItem->category && $request->providerItem->category->is_asset;
                                                     @endphp
                                                     <tr>
-                                                        
                                                         <td>{{ $request->requester->name ?? '-' }}</td>
                                                         <td>
                                                             <span class="fw-semibold">{{ $request->providerItem->name ?? '-' }}</span>
@@ -293,7 +289,7 @@
                             </div>
                         </div>
                     </div>
-
+                </div>
                 <!-- Finished Transactions -->
                 <div class="tab-pane fade" id="finished" role="tabpanel" aria-labelledby="finished-tab">
                     <div class="row g-4">
@@ -304,19 +300,17 @@
                                     <i class="bi bi-send"></i> Sent (Completed/Rejected/Cancelled)
                                 </div>
                                 <div class="card-body bg-gradient-dark text-white rounded-bottom-4">
-                                    @php
-                                        $finishedSent = $sentRequests->filter(function($r) {
-                                            return in_array($r->status, ['fulfilled','rejected','cancelled']);
-                                        });
-                                        if (request('search')) {
-                                            $finishedSent = $finishedSent->filter(function($r) {
-                                                $needle = strtolower(request('search'));
-                                                return str_contains(strtolower($r->requestedItem->name ?? ''), $needle)
-                                                    || str_contains(strtolower($r->provider->name ?? ''), $needle)
-                                                    || str_contains(strtolower($r->status), $needle);
-                                            });
-                                        }
-                                    @endphp
+@php
+    $finishedSent = $sentRequestsFinished;
+    if (request('search')) {
+        $finishedSent = $finishedSent->filter(function($r) {
+            $needle = strtolower(request('search'));
+            return str_contains(strtolower($r->requestedItem->name ?? ''), $needle)
+                || str_contains(strtolower($r->provider->name ?? ''), $needle)
+                || str_contains(strtolower($r->status), $needle);
+        });
+    }
+@endphp
                                     @if($finishedSent->isEmpty())
                                         <div class="alert alert-info mb-0">No finished sent requests.</div>
                                     @else
@@ -324,7 +318,6 @@
                                             <table class="table table-hover align-middle table-dark table-striped mb-0">
                                                 <thead class="table-light text-dark">
                                                     <tr>
-                                                        
                                                         <th>To</th>
                                                         <th>Item</th>
                                                         <th>Qty</th>
@@ -340,7 +333,6 @@
                                                         $isAsset = $request->providerItem && $request->providerItem->category && $request->providerItem->category->is_asset;
                                                     @endphp
                                                     <tr>
-                                                        
                                                         <td>{{ $request->provider->name ?? '-' }}</td>
                                                         <td>
                                                             <span class="fw-semibold">{{ $request->requestedItem->name ?? '-' }}</span>
@@ -414,19 +406,17 @@
                                     <i class="bi bi-box-arrow-in-down"></i> Received (Completed/Rejected/Cancelled)
                                 </div>
                                 <div class="card-body bg-gradient-dark text-white rounded-bottom-4">
-                                    @php
-                                        $finishedReceived = $receivedRequests->filter(function($r) {
-                                            return in_array($r->status, ['fulfilled','rejected','cancelled']);
-                                        });
-                                        if (request('search')) {
-                                            $finishedReceived = $finishedReceived->filter(function($r) {
-                                                $needle = strtolower(request('search'));
-                                                return str_contains(strtolower($r->providerItem->name ?? ''), $needle)
-                                                    || str_contains(strtolower($r->requester->name ?? ''), $needle)
-                                                    || str_contains(strtolower($r->status), $needle);
-                                            });
-                                        }
-                                    @endphp
+@php
+    $finishedReceived = $receivedRequestsFinished;
+    if (request('search')) {
+        $finishedReceived = $finishedReceived->filter(function($r) {
+            $needle = strtolower(request('search'));
+            return str_contains(strtolower($r->providerItem->name ?? ''), $needle)
+                || str_contains(strtolower($r->requester->name ?? ''), $needle)
+                || str_contains(strtolower($r->status), $needle);
+        });
+    }
+@endphp
                                     @if($finishedReceived->isEmpty())
                                         <div class="alert alert-info mb-0">No finished received requests.</div>
                                     @else
@@ -434,7 +424,6 @@
                                             <table class="table table-hover align-middle table-dark table-striped mb-0">
                                                 <thead class="table-light text-dark">
                                                     <tr>
-                                                        
                                                         <th>From</th>
                                                         <th>Item</th>
                                                         <th>Qty</th>
@@ -450,7 +439,6 @@
                                                         $isAsset = $request->providerItem && $request->providerItem->category && $request->providerItem->category->is_asset;
                                                     @endphp
                                                     <tr>
-                                                        
                                                         <td>{{ $request->requester->name ?? '-' }}</td>
                                                         <td>
                                                             <span class="fw-semibold">{{ $request->providerItem->name ?? '-' }}</span>

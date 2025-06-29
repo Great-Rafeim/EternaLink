@@ -7,7 +7,7 @@
                 <i class="bi bi-bell-fill me-2"></i> Notifications
             </h2>
             <div>
-                <form action="{{ route('cemetery.notifications.markAllAsRead') }}" method="POST" class="d-inline">
+                <form action="{{ route('notifications.markAllAsRead') }}" method="POST" class="d-inline">
                     @csrf
                     <button class="btn btn-outline-success btn-sm" type="submit"
                         @if($notifications->whereNull('read_at')->count() === 0) disabled @endif>
@@ -33,14 +33,14 @@
                                 </div>
                                 <div class="ms-auto d-flex align-items-center gap-2">
                                     @if(is_null($notification->read_at))
-                                        <form action="{{ route('cemetery.notifications.markAsRead', $notification->id) }}" method="POST" class="d-inline">
+                                        <form action="{{ route('notifications.markAsRead', $notification->id) }}" method="POST" class="d-inline">
                                             @csrf
                                             <button class="btn btn-link btn-sm text-success" type="submit" title="Mark as read">
                                                 <i class="bi bi-check2-circle"></i>
                                             </button>
                                         </form>
                                     @endif
-                                    <form action="{{ route('cemetery.notifications.destroy', $notification->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this notification?');">
+                                    <form action="{{ route('notifications.destroy', $notification->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this notification?');">
                                         @csrf
                                         @method('DELETE')
                                         <button class="btn btn-link btn-sm text-danger" type="submit" title="Delete">
@@ -48,7 +48,7 @@
                                         </button>
                                     </form>
                                     @if(!empty($notification->data['url']))
-                                        <a href="{{ route('cemetery.notifications.redirect', $notification->id) }}" class="btn btn-link btn-sm text-primary" title="View details">
+                                        <a href="{{ route('notifications.redirect', $notification->id) }}" class="btn btn-link btn-sm text-primary" title="View details">
                                             <i class="bi bi-arrow-right-circle"></i>
                                         </a>
                                     @endif

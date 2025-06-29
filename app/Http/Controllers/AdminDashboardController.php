@@ -8,21 +8,34 @@ use App\Models\LoginHistory;
 
 class AdminDashboardController extends Controller
 {
-    public function index()
-    {
-        return view('admin.dashboard', [
-            'totalUsers'    => User::count(),
-            'funeralCount'  => User::where('role', 'funeral')->count(),
-            'cemeteryCount' => User::where('role', 'cemetery')->count(),
-            'logins'        => LoginHistory::with('user')->latest()->limit(10)->get(),
-        ]);
-    }
+public function index()
+{
+    // Get the most recent 10 logins
+    $logins = \App\Models\LoginHistory::with('user')->latest()->limit(10)->get();
 
-    public function loginHistory(Request $request)
-    {
-        $logins = LoginHistory::with('user')->latest()->paginate(20);
+    // Pending registration requests: status = 'pending', role = funeral/cemetery/agent
+    $pendingRequests = \App\Models\User::where('status', 'pending')
+        ->whereIn('role', ['funeral', 'cemetery', 'agent'])
+        ->latest()
+        ->get();
 
-        return view('admin.login-history.index', compact('logins'));
-    }
+    return view('admin.dashboard', [
+        'totalUsers'      => \App\Models\User::count(),
+        'clientCount'     => \App\Models\User::where('role', 'client')->count(),
+        'agentCount'      => \App\Models\User::where('role', 'agent')->count(),
+        'funeralCount'    => \App\Models\User::where('role', 'funeral')->count(),
+        'cemeteryCount'   => \App\Models\User::where('role', 'cemetery')->count(),
+        'logins'          => $logins,
+        'pendingRequests' => $pendingRequests,
+    ]);
+}
+
+
+public function loginHistory(Request $request)
+{
+    $logins = \App\Models\LoginHistory::with('user')->latest()->paginate(20);
+    return view('admin.login-history.index', compact('logins'));
+}
+
 }
     

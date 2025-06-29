@@ -33,10 +33,9 @@ class ClientDashboardController extends Controller
 
 
 
-// Booking detail view
 public function show($id)
 {
-    $booking = Booking::with([
+    $booking = \App\Models\Booking::with([
             'package.items.category',
             'funeralHome',
             'bookingAgent.agentUser',
@@ -44,7 +43,7 @@ public function show($id)
             'cemeteryBooking.cemetery.user',
             'cemeteryBooking.plot',
         ])
-        ->where('client_user_id', Auth::id())
+        ->where('client_user_id', \Auth::id())
         ->findOrFail($id);
 
     // Prepare the package items array
@@ -73,14 +72,32 @@ public function show($id)
         ->orderBy('created_at', 'desc')
         ->get();
 
-    // Now you can use $booking->cemeteryBooking in your Blade
+    // Find assigned plot via booking_details
+    $bookingDetail = \App\Models\BookingDetail::where('booking_id', $booking->id)->first();
+    $plot = null;
+    $plotCemetery = null;
+    $cemeteryOwner = null;
+
+    if ($bookingDetail && $bookingDetail->plot_id) {
+        $plot = \App\Models\Plot::with('cemetery.user')->find($bookingDetail->plot_id);
+        if ($plot) {
+            $plotCemetery = $plot->cemetery;         // The Cemetery model
+            $cemeteryOwner = $plotCemetery?->user;   // The User model (cemetery owner)
+        }
+    }
+
+    // Now you can use $booking->cemeteryBooking and $plot, $plotCemetery, $cemeteryOwner in your Blade
     return view('client.bookings.show', compact(
         'booking',
         'packageItems',
         'assetCategories',
-        'serviceLogs'
+        'serviceLogs',
+        'plot',
+        'plotCemetery',
+        'cemeteryOwner'
     ));
 }
+
 
 
 

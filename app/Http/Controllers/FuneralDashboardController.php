@@ -41,80 +41,87 @@ class FuneralDashboardController extends Controller
         ]);
     }
 
-    // 2. BOOKINGS MANAGEMENT (Grouped by status)
-    public function bookings()
-    {
-        $funeralHomeId = auth()->id();
+public function bookings(Request $request)
+{
+    $funeralHomeId = auth()->id();
 
-        // New = pending or assigned (awaiting initial review)
-        $newBookings = Booking::with(['client', 'agent', 'package'])
-            ->where('funeral_home_id', $funeralHomeId)
-            ->whereIn('status', [
-                Booking::STATUS_PENDING,
-                Booking::STATUS_CONFIRMED
-            ])
-            ->orderByDesc('created_at')
-            ->get();
-        $forInitialReviewBookings = Booking::with(['client', 'agent', 'package'])
-            ->where('funeral_home_id', $funeralHomeId)
-            ->where('status', Booking::STATUS_FOR_INITIAL_REVIEW)
-            ->orderByDesc('updated_at')
-            ->get();
-        // Client is filling out booking forms
-        $inProgressBookings = Booking::with(['client', 'agent', 'package'])
-            ->where('funeral_home_id', $funeralHomeId)
-            ->where('status', Booking::STATUS_IN_PROGRESS)
-            ->orderByDesc('updated_at')
-            ->get();
+    $query = \App\Models\Booking::with([
+        'client',
+        'package',
+        'bookingAgent.agentUser'
+    ])->where('funeral_home_id', $funeralHomeId);
 
-        // Client submitted all booking forms, pending parlor review
-        $readyForReviewBookings = Booking::with(['client', 'agent', 'package', 'detail'])
-            ->where('funeral_home_id', $funeralHomeId)
-            ->where('status', Booking::STATUS_SUBMITTED)
-            ->orderByDesc('updated_at')
-            ->get();
-
-        // All details approved by parlor, awaiting start
-        $approvedBookings = Booking::with(['client', 'agent', 'package'])
-            ->where('funeral_home_id', $funeralHomeId)
-            ->where('status', Booking::STATUS_APPROVED)
-            ->orderByDesc('updated_at')
-            ->get();
-        // Ongoing service
-        $ongoingBookings = Booking::with(['client', 'agent', 'package'])
-            ->where('funeral_home_id', $funeralHomeId)
-            ->where('status', Booking::STATUS_ONGOING)
-            ->orderByDesc('updated_at')
-            ->get();
-
-        // Done = completed
-        $doneBookings = Booking::with(['client', 'agent', 'package'])
-            ->where('funeral_home_id', $funeralHomeId)
-            ->where('status', Booking::STATUS_COMPLETED)
-            ->orderByDesc('updated_at')
-            ->get();
-
-        // Customization requests (pending only)
-$customizationRequests = Booking::with(['client', 'package', 'customizationRequests' => function($q) {
-    $q->where('status', 'pending');
-}])
-->where('funeral_home_id', $funeralHomeId)
-->whereHas('customizationRequests', fn($q) => $q->where('status', 'pending'))
-->orderByDesc('updated_at')
-->get();
-
-
-        return view('funeral.bookings.index', compact(
-            'newBookings',
-            'inProgressBookings',
-            'forInitialReviewBookings',
-            'readyForReviewBookings',
-            'approvedBookings',
-            'ongoingBookings',
-            'doneBookings',
-            'customizationRequests'
-        ));
+    // --- Status Filter ---
+    $status = $request->input('status', 'all');
+    if ($status && $status !== 'all') {
+        $query->where('status', $status);
     }
+
+    // --- Search (client, package, agent) ---
+    $search = $request->input('search');
+    if ($search) {
+        $query->where(function($q) use ($search) {
+            $q->whereHas('client', fn($q) => $q->where('name', 'like', "%$search%"))
+                ->orWhereHas('package', fn($q) => $q->where('name', 'like', "%$search%"))
+                ->orWhereHas('bookingAgent.agentUser', fn($q) => $q->where('name', 'like', "%$search%"));
+        });
+    }
+
+    // --- Sorting ---
+    $sort = $request->input('sort', 'created_at');
+    $dir = $request->input('dir', 'desc');
+    if ($sort === 'client') {
+        $query->join('users as clients', 'bookings.client_user_id', '=', 'clients.id')
+              ->orderBy('clients.name', $dir)
+              ->select('bookings.*');
+    } elseif ($sort === 'status') {
+        $query->orderBy('status', $dir);
+    } else {
+        $query->orderBy($sort, $dir);
+    }
+
+    // --- Pagination ---
+    $bookings = $query->paginate(25)->withQueryString();
+
+    // --- Status Options (Complete List) ---
+    $statusOptions = [
+        'all'                                          => 'All',
+        \App\Models\Booking::STATUS_PENDING            => 'Pending',
+        \App\Models\Booking::STATUS_CONFIRMED          => 'Confirmed',
+        \App\Models\Booking::STATUS_FOR_PAYMENT_DETAILS=> 'For Payment Details',
+        \App\Models\Booking::STATUS_IN_PROGRESS        => 'Client Filling Forms',
+        \App\Models\Booking::STATUS_FOR_INITIAL_REVIEW => 'For Initial Review',
+        \App\Models\Booking::STATUS_FOR_FINAL_REVIEW   => 'For Final Review',
+        \App\Models\Booking::STATUS_SUBMITTED          => 'For Review',
+        \App\Models\Booking::STATUS_APPROVED           => 'Approved',
+        \App\Models\Booking::STATUS_ONGOING            => 'Ongoing',
+        \App\Models\Booking::STATUS_COMPLETED          => 'Completed',
+        \App\Models\Booking::STATUS_DECLINED           => 'Declined',
+        \App\Models\Booking::STATUS_CANCELLED          => 'Cancelled',
+    ];
+
+    // --- Customization Requests (pending only) ---
+    $customizationRequests = \App\Models\Booking::with([
+        'client',
+        'package',
+        'customizationRequests' => function ($q) {
+            $q->where('status', 'pending');
+        }
+    ])
+    ->where('funeral_home_id', $funeralHomeId)
+    ->whereHas('customizationRequests', function($q) {
+        $q->where('status', 'pending');
+    })
+    ->orderByDesc('updated_at')
+    ->get();
+
+    return view('funeral.bookings.index', compact(
+        'bookings',
+        'statusOptions',
+        'customizationRequests'
+    ));
+}
+
 
 public function show(Booking $booking)
 {
@@ -180,6 +187,20 @@ public function show(Booking $booking)
         $invitationStatus = $invitation ? $invitation->status : null;
     }
 
+    // Find assigned plot via booking_details
+    $bookingDetail = \App\Models\BookingDetail::where('booking_id', $booking->id)->first();
+    $plot = null;
+    $plotCemetery = null;
+    $cemeteryOwner = null;
+
+    if ($bookingDetail && $bookingDetail->plot_id) {
+        $plot = \App\Models\Plot::with('cemetery.user')->find($bookingDetail->plot_id);
+        if ($plot) {
+            $plotCemetery = $plot->cemetery;         // The Cemetery model
+            $cemeteryOwner = $plotCemetery?->user;   // The User model (cemetery owner)
+        }
+    }
+
     // Pass only the approved cemetery booking to the view (may be null)
     $cemeteryBooking = $booking->cemeteryBooking;
 
@@ -190,9 +211,13 @@ public function show(Booking $booking)
         'parlorAgents',
         'invitationStatus',
         'bookingAgent',
-        'cemeteryBooking'
+        'cemeteryBooking',
+        'plot',
+        'plotCemetery',
+        'cemeteryOwner'
     ));
 }
+
 
 
 
@@ -218,39 +243,29 @@ public function approve(Request $request, Booking $booking)
                 : $booking->package->items;
 
             foreach ($items as $item) {
-                // Try to resolve to actual InventoryItem model
                 $invItem = null;
                 $category = null;
                 $qtyToDeduct = 1;
 
-                // Customized package item case
                 if (isset($item->inventoryItem) && $item->inventoryItem) {
                     $invItem = $item->inventoryItem;
                     $qtyToDeduct = $item->quantity ?? 1;
-                }
-                // Normal package item case
-                elseif ($item instanceof \App\Models\InventoryItem) {
+                } elseif ($item instanceof \App\Models\InventoryItem) {
                     $invItem = $item;
                     $qtyToDeduct = $item->pivot->quantity ?? 1;
                 }
 
-                if (!$invItem) continue; // Safety: skip if not found
+                if (!$invItem) continue;
 
-                // Get category and check consumable (not asset)
                 $category = $invItem->category ?? $invItem->load('category')->category;
-                if (!$category || $category->is_asset) {
-                    continue; // Not a consumable, skip
-                }
+                if (!$category || $category->is_asset) continue;
 
-                // Defensive: Don't over-deduct, must be positive and not null
                 if ($invItem->quantity === null || $invItem->quantity < $qtyToDeduct) {
                     throw new \Exception("Not enough stock for '{$invItem->name}'. Available: {$invItem->quantity}, Required: $qtyToDeduct");
                 }
 
-                // Deduct only for valid inventory items
                 $invItem->quantity = max(0, $invItem->quantity - $qtyToDeduct);
 
-                // Deduct shareable if enabled and present
                 if ($invItem->shareable && !is_null($invItem->shareable_quantity) && $invItem->shareable_quantity > 0) {
                     $invItem->shareable_quantity = max(0, $invItem->shareable_quantity - min($qtyToDeduct, $invItem->shareable_quantity));
                 }
@@ -267,49 +282,94 @@ public function approve(Request $request, Booking $booking)
     }
 
     // ==== Notification Block ====
-if ($booking->client) {
-    $clientMsg = ($newStatus === Booking::STATUS_CONFIRMED)
-        ? "Your booking for <b>{$booking->package->name}</b> has been <b>PRE-APPROVED</b>. Please proceed with filling out the required information."
-        : "Your booking for <b>{$booking->package->name}</b> has been <b>APPROVED</b>. You may now proceed to the next steps.";
-    $booking->client->notify(new BookingStatusChanged($booking, $clientMsg));
-}
+    $packageName = $booking->package->name ?? 'the package';
+    $clientName  = $booking->client->name ?? 'the client';
+    $parlorName  = $booking->funeralHome->name ?? 'Funeral Parlor';
 
-if ($booking->agent) {
-    $agentMsg = ($newStatus === Booking::STATUS_CONFIRMED)
-        ? "A booking for <b>{$booking->package->name}</b> assigned to your client has been <b>PRE-APPROVED</b>. The client can now fill out the required information."
-        : "A booking for <b>{$booking->package->name}</b> assigned to your client has been <b>APPROVED</b> and is now ready to proceed.";
-    $booking->agent->notify(new BookingStatusChanged($booking, $agentMsg));
-}
+    // Notify client
+    if ($booking->client) {
+        if ($newStatus === Booking::STATUS_CONFIRMED) {
+            $clientMsg = "Your booking for <b>{$packageName}</b> has been <b>PRE-APPROVED</b>. Please proceed with filling out the required information.";
+        } elseif ($newStatus === Booking::STATUS_APPROVED) {
+            $clientMsg = "Your booking for <b>{$packageName}</b> has been <b>APPROVED</b>. Wait for the service to start.";
+        }
+        \Log::info('[NOTIFY] Approve: Notifying client', [
+            'client_id'   => $booking->client->id ?? null,
+            'client_name' => $clientName,
+            'message'     => $clientMsg ?? null,
+        ]);
+        $booking->client->notify(new \App\Notifications\BookingStatusChanged($booking, $clientMsg, 'client'));
+    }
 
+    // Notify agent (if any)
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        if ($newStatus === Booking::STATUS_CONFIRMED) {
+            $agentMsg = "A booking for <b>{$packageName}</b> assigned to your client (<b>{$clientName}</b>) at <b>{$parlorName}</b> has been <b>PRE-APPROVED</b>. The client can now fill out the required information.";
+        } elseif ($newStatus === Booking::STATUS_APPROVED) {
+            $agentMsg = "A booking for <b>{$packageName}</b> assigned to your client (<b>{$clientName}</b>) at <b>{$parlorName}</b> has been <b>APPROVED</b> and is now ready to proceed.";
+        }
+        if ($agentUser) {
+            \Log::info('[NOTIFY] Approve: Notifying agent', [
+                'agent_id'    => $agentUser->id,
+                'agent_name'  => $agentUser->name,
+                'message'     => $agentMsg ?? null,
+            ]);
+            $agentUser->notify(new \App\Notifications\BookingStatusChanged($booking, $agentMsg, 'agent'));
+        }
+    }
 
     return redirect()->route('funeral.bookings.index')
         ->with('success', 'Booking approved, consumable inventory updated.');
 }
 
 
-    // 5. DENY BOOKING
-    public function deny(Request $request, Booking $booking)
-    {
-        $this->authorizeBooking($booking);
 
-        if ($booking->status === Booking::STATUS_DECLINED) {
-            logger()->warning("Booking {$booking->id} is already declined.");
-            return back()->with('error', 'Booking already declined.');
-        }
+// 5. DENY BOOKING
+public function deny(Request $request, Booking $booking)
+{
+    $this->authorizeBooking($booking);
 
-        $booking->status = Booking::STATUS_DECLINED;
-        $booking->save();
-
-        $message = "Your booking for <b>{$booking->package->name}</b> has been <b>DECLINED</b>.";
-        if ($booking->client) {
-            $booking->client->notify(new BookingStatusChanged($booking, $message));
-        }
-        if ($booking->agent) {
-            $booking->agent->notify(new BookingStatusChanged($booking, "A booking you are handling was DECLINED."));
-        }
-
-        return redirect()->route('funeral.bookings.index')->with('success', 'Booking declined.');
+    if ($booking->status === Booking::STATUS_DECLINED) {
+        logger()->warning("Booking {$booking->id} is already declined.");
+        return back()->with('error', 'Booking already declined.');
     }
+
+    $booking->status = Booking::STATUS_DECLINED;
+    $booking->save();
+
+    $packageName = $booking->package->name ?? 'the package';
+    $clientName  = $booking->client->name ?? 'the client';
+    $parlorName  = $booking->funeralHome->name ?? 'Funeral Parlor';
+
+    // Notify client
+    if ($booking->client) {
+        $clientMsg = "Your booking for <b>{$packageName}</b> at <b>{$parlorName}</b> has been <b>DECLINED</b>.";
+        \Log::info('[NOTIFY] Deny: Notifying client', [
+            'client_id'   => $booking->client->id ?? null,
+            'client_name' => $clientName,
+            'message'     => $clientMsg,
+        ]);
+        $booking->client->notify(new \App\Notifications\BookingStatusChanged($booking, $clientMsg, 'client'));
+    }
+
+    // Notify agent (if any)
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        $agentMsg = "A booking for <b>{$packageName}</b> assigned to your client (<b>{$clientName}</b>) at <b>{$parlorName}</b> has been <b>DECLINED</b>.";
+        if ($agentUser) {
+            \Log::info('[NOTIFY] Deny: Notifying agent', [
+                'agent_id'    => $agentUser->id,
+                'agent_name'  => $agentUser->name,
+                'message'     => $agentMsg,
+            ]);
+            $agentUser->notify(new \App\Notifications\BookingStatusChanged($booking, $agentMsg, 'agent'));
+        }
+    }
+
+    return redirect()->route('funeral.bookings.index')->with('success', 'Booking declined.');
+}
+
 
 
 public function accept($bookingId)
@@ -362,51 +422,85 @@ public function manageService(Booking $booking)
     // $this->authorize('manage', $booking);
     return view('funeral.bookings.manage-service', compact('booking'));
 }
-    // FINAL APPROVAL: submitted ➔ approved
-    public function finalApprove(Request $request, Booking $booking)
-    {
-        $this->authorizeBooking($booking);
+// FINAL APPROVAL: submitted ➔ approved
+public function finalApprove(Request $request, Booking $booking)
+{
+    $this->authorizeBooking($booking);
 
-        if ($booking->status !== Booking::STATUS_SUBMITTED) {
-            return back()->with('error', 'Booking cannot be approved at this stage.');
-        }
-
-        $booking->status = Booking::STATUS_APPROVED;
-        $booking->save();
-
-        // Notify client and agent
-        $message = "Your booking for <b>{$booking->package->name}</b> has been <b>APPROVED</b> and is now ready to start.";
-        if ($booking->client) {
-            $booking->client->notify(new BookingStatusChanged($booking, $message));
-        }
-        if ($booking->agent) {
-            $booking->agent->notify(new BookingStatusChanged($booking, "A booking you are handling was FULLY APPROVED."));
-        }
-
-        return redirect()->route('funeral.bookings.index')->with('success', 'Booking fully approved and ready to start.');
+    if ($booking->status !== Booking::STATUS_SUBMITTED) {
+        return back()->with('error', 'Booking cannot be approved at this stage.');
     }
+
+    $booking->status = Booking::STATUS_APPROVED;
+    $booking->save();
+
+    // Notify client
+    $packageName = $booking->package->name ?? 'the package';
+    $message = "Your booking for <b>{$packageName}</b> has been <b>APPROVED</b> and is now ready to start.";
+    if ($booking->client) {
+        $booking->client->notify(new BookingStatusChanged($booking, $message, 'client'));
+    }
+
+    // Notify agent (use bookingAgent, not $booking->agent)
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        $clientName = $booking->client->name ?? 'the client';
+        $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+        $agentMsg = "The booking for <b>{$packageName}</b> (client: <b>{$clientName}</b>, parlor: <b>{$parlorName}</b>) was <b>FULLY APPROVED</b> and is ready to start.";
+        if ($agentUser) {
+            $agentUser->notify(new BookingStatusChanged($booking, $agentMsg, 'agent'));
+        }
+    }
+
+    return redirect()->route('funeral.bookings.index')->with('success', 'Booking fully approved and ready to start.');
+}
+
 
             // START SERVICE: approved ➔ ongoing
-    public function startService(Booking $booking)
-    {
-        // Only allow if currently approved
-        if ($booking->status !== Booking::STATUS_APPROVED) {
-            return back()->with('error', 'Service can only be started from approved bookings.');
-        }
-
-        $booking->status = Booking::STATUS_ONGOING;
-        $booking->save();
-
-        // Optionally: Send notification
-        if ($booking->client) {
-            $booking->client->notify(new BookingStatusChanged($booking, "The funeral service for <b>{$booking->package->name}</b> has <b>STARTED</b>."));
-        }
-        if ($booking->agent) {
-            $booking->agent->notify(new BookingStatusChanged($booking, "The funeral service for <b>{$booking->package->name}</b> has <b>STARTED</b>."));
-        }
-
-        return back()->with('success', 'Service started. Status is now Ongoing.');
+public function startService(Booking $booking)
+{
+    // Only allow if currently approved
+    if ($booking->status !== Booking::STATUS_APPROVED) {
+        return back()->with('error', 'Service can only be started from approved bookings.');
     }
+
+    $booking->status = Booking::STATUS_ONGOING;
+    $booking->save();
+
+    $bookingId   = $booking->id;
+    $packageName = $booking->package->name ?? 'the package';
+    $clientName  = $booking->client->name ?? 'the client';
+    $parlorName  = $booking->funeralHome->name ?? 'Funeral Parlor';
+
+    // Notify client
+    if ($booking->client) {
+        $msg = "The funeral service for <b>{$packageName}</b> (<b>Booking #{$bookingId}</b>) has <b>STARTED</b>.";
+        \Log::info('[NOTIFY] Service started: Notifying client', [
+            'booking_id' => $bookingId,
+            'client_id' => $booking->client->id ?? null,
+            'message' => $msg,
+        ]);
+        $booking->client->notify(new BookingStatusChanged($booking, $msg, 'client'));
+    }
+
+    // Notify agent (if any, via booking_agent table)
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        $msg = "The funeral service for <b>{$packageName}</b> (<b>Booking #{$bookingId}</b>) for client <b>{$clientName}</b> at <b>{$parlorName}</b> has <b>STARTED</b>.";
+        if ($agentUser) {
+            \Log::info('[NOTIFY] Service started: Notifying agent', [
+                'booking_id' => $bookingId,
+                'agent_id' => $agentUser->id,
+                'message' => $msg,
+            ]);
+            $agentUser->notify(new BookingStatusChanged($booking, $msg, 'agent'));
+        }
+    }
+
+    return back()->with('success', 'Service started. Status is now Ongoing.');
+}
+
+
 
     // MARK AS COMPLETED: ongoing ➔ completed
     public function markCompleted(Request $request, Booking $booking)
@@ -427,12 +521,12 @@ public function manageService(Booking $booking)
     /**
      * Ensures that the booking belongs to the currently authenticated funeral home user.
      */
-    protected function authorizeBooking(Booking $booking)
-    {
-        if ($booking->funeral_home_id !== auth()->id()) {
-            abort(403, 'Unauthorized.');
+        protected function authorizeBooking(Booking $booking)
+        {
+            if ($booking->funeral_home_id !== auth()->id()) {
+                abort(403, 'Unauthorized.');
+            }
         }
-    }
 
     // Show customization request details
 public function customizationShow($bookingId, $customizedPackageId)
@@ -483,8 +577,6 @@ $assetCategories = \DB::table('inventory_categories')
         return view('funeral.bookings.review-details', compact('booking'));
     }
 
-    // Approve customization request
- // Approve customization request
 public function customizationApprove(Request $request, $bookingId, $customizedPackageId)
 {
     $booking = Booking::where('funeral_home_id', auth()->id())->findOrFail($bookingId);
@@ -535,11 +627,26 @@ public function customizationApprove(Request $request, $bookingId, $customizedPa
     $booking->customized_package_id = $customized->id;
     $booking->save();
 
-    $booking->client->notify(new \App\Notifications\CustomizationRequestApproved($booking, $customized));
+    // Notify client
+    $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+    $clientName = $booking->client->name ?? 'the client';
 
-    $agent = $booking->agent;
-    if ($agent) {
-        $agent->notify(new \App\Notifications\CustomizationRequestApproved($booking, $customized));
+    $clientMsg = "Your customization request for booking <b>#{$booking->id}</b> at <b>{$parlorName}</b> was <b>APPROVED</b>. The updated package and pricing are now in effect.";
+    if ($booking->client) {
+        $booking->client->notify(
+            new \App\Notifications\CustomizationRequestApproved($booking, $customized, $clientMsg, 'client')
+        );
+    }
+
+    // Notify agent (if any)
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        $agentMsg = "The customization request for booking <b>#{$booking->id}</b> for client <b>{$clientName}</b> at <b>{$parlorName}</b> was <b>APPROVED</b> by the funeral parlor. The updated package and pricing have been applied.";
+        if ($agentUser) {
+            $agentUser->notify(
+                new \App\Notifications\CustomizationRequestApproved($booking, $customized, $agentMsg, 'agent')
+            );
+        }
     }
 
     return back()->with('success', 'Customization approved, price recalculated, and client notified.');
@@ -562,16 +669,30 @@ public function customizationDeny(Request $request, $bookingId, $customizedPacka
     $customized->status = 'denied';
     $customized->save();
 
-    // Optionally: revert to original items if needed
+    // Notify client
+    if ($booking->client) {
+        $clientMsg = "Your request to customize the package for booking <b>#{$booking->id}</b> has been <b>DENIED</b> by the funeral parlor. Please contact support if you have questions.";
+        $booking->client->notify(
+            new \App\Notifications\CustomizationRequestDenied($booking, $customized, $clientMsg, 'client')
+        );
+    }
 
-    $booking->client->notify(new \App\Notifications\CustomizationRequestDenied($booking, $customized));
-    $agent = $booking->agent;
-    if ($agent) {
-        $agent->notify(new \App\Notifications\CustomizationRequestDenied($booking, $customized));
+    // Notify agent (if any)
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+        $clientName = $booking->client->name ?? 'the client';
+        $agentMsg = "The customization request for booking <b>#{$booking->id}</b> for client <b>{$clientName}</b> at <b>{$parlorName}</b> was <b>DENIED</b> by the funeral parlor.";
+        if ($agentUser) {
+            $agentUser->notify(
+                new \App\Notifications\CustomizationRequestDenied($booking, $customized, $agentMsg, 'agent')
+            );
+        }
     }
 
     return back()->with('success', 'Customization denied. Client notified.');
 }
+
 
 // FuneralDashboardController.php
 
@@ -615,13 +736,25 @@ public function updateOtherFees(Request $request, Booking $booking)
     // Notify the client
     if ($booking->client) {
         $msg = "The funeral parlor has set additional fees for your booking. Please proceed to fill in the deceased's personal details.";
-        $booking->client->notify(new \App\Notifications\BookingStatusChanged($booking, $msg));
+        $booking->client->notify(new \App\Notifications\BookingStatusChanged($booking, $msg, 'client'));
+    }
+
+    // Notify agent (if any)
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+        $clientName = $booking->client->name ?? 'the client';
+        $msg = "The funeral parlor <b>{$parlorName}</b> has set other fees for booking <b>#{$booking->id}</b> assigned to your client <b>{$clientName}</b>. The booking is now in progress.";
+        if ($agentUser) {
+            $agentUser->notify(new \App\Notifications\BookingStatusChanged($booking, $msg, 'agent'));
+        }
     }
 
     return redirect()
         ->route('funeral.bookings.show', $booking->id)
         ->with('success', 'Other fees updated and client notified. Booking is now in progress.');
 }
+
 
 public function updatePaymentRemarks(Request $request, Booking $booking)
 {
@@ -638,19 +771,30 @@ public function updatePaymentRemarks(Request $request, Booking $booking)
     // Notify client
     if ($booking->client) {
         $msg = "The funeral parlor has added or updated payment remarks for your booking.";
-        $booking->client->notify(new \App\Notifications\BookingStatusChanged($booking, $msg));
+        $booking->client->notify(new \App\Notifications\BookingStatusChanged($booking, $msg, 'client'));
+    }
+
+    // Notify agent (if any)
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+        $clientName = $booking->client->name ?? 'the client';
+        $msg = "The funeral parlor <b>{$parlorName}</b> has updated payment remarks for booking <b>#{$booking->id}</b> assigned to your client <b>{$clientName}</b>.";
+        if ($agentUser) {
+            $agentUser->notify(new \App\Notifications\BookingStatusChanged($booking, $msg, 'agent'));
+        }
     }
 
     return back()->with('success', 'Payment remarks updated.');
 }
 
 
+
 public function updateInfo(Request $request, $bookingId)
 {
-    $booking = Booking::with(['detail', 'package.items', 'customizedPackage', 'client'])->findOrFail($bookingId);
+    $booking = Booking::with(['detail', 'package.items', 'customizedPackage', 'client', 'funeralHome', 'bookingAgent'])->findOrFail($bookingId);
 
     // Only allow users from this funeral home (or with correct role) to edit
-    // (Assume User has 'funeral_home_id' for matching)
     if (
         auth()->user()->role !== 'funeral' ||
         auth()->user()->id != $booking->funeral_home_id
@@ -658,8 +802,10 @@ public function updateInfo(Request $request, $bookingId)
         abort(403, 'Unauthorized access');
     }
 
+    $detail = $booking->detail ?: new BookingDetail(['booking_id' => $booking->id]);
+    $hasExistingImage = $detail && $detail->deceased_image;
 
-    // Validation - keep same as client side
+    // Validation - add image logic
     $validated = $request->validate([
         // A. Deceased Personal Details
         'deceased_first_name'        => 'required|string|max:100',
@@ -688,6 +834,14 @@ public function updateInfo(Request $request, $bookingId)
         'interment_cremation_date'   => 'nullable|date',
         'interment_cremation_time'   => 'nullable|string|max:30',
         'cemetery_or_crematory'      => 'nullable|string|max:255',
+
+        // IMAGE upload
+        'deceased_image' => [
+            $hasExistingImage ? 'nullable' : 'required',
+            'image',
+            'max:20480'
+        ],
+        'remove_deceased_image' => 'nullable|in:0,1',
 
         // B. Documents
         'death_cert_registration_no'     => 'nullable|string|max:100',
@@ -741,23 +895,36 @@ public function updateInfo(Request $request, $bookingId)
     }
 
     // Save or update BookingDetail
-    $detail = $booking->detail ?: new BookingDetail(['booking_id' => $booking->id]);
     $detail->fill($validated);
-
-    // Always overwrite these (enforced by system)
     $detail->service = $serviceName;
     $detail->amount = $validated['amount'] ?? 0;
     $detail->booking_id = $booking->id;
 
-    // Set signature images
+    // Signature images
     $detail->death_cert_released_signature         = $validated['death_cert_released_signature'] ?? null;
     $detail->funeral_contract_released_signature   = $validated['funeral_contract_released_signature'] ?? null;
     $detail->official_receipt_released_signature   = $validated['official_receipt_released_signature'] ?? null;
     $detail->certifier_signature_image             = $validated['certifier_signature_image'] ?? null;
 
+    // -------- Handle Deceased Image Upload --------
+    if ($request->input('remove_deceased_image') === '1') {
+        if ($detail->deceased_image && \Storage::disk('public')->exists($detail->deceased_image)) {
+            \Storage::disk('public')->delete($detail->deceased_image);
+        }
+        $detail->deceased_image = null;
+    } elseif ($request->hasFile('deceased_image')) {
+        // Remove old image if any
+        if ($detail->deceased_image && \Storage::disk('public')->exists($detail->deceased_image)) {
+            \Storage::disk('public')->delete($detail->deceased_image);
+        }
+        $path = $request->file('deceased_image')->store('deceased_images', 'public');
+        $detail->deceased_image = $path;
+    }
+    // If not removing and no upload, old image stays
+
     $detail->save();
 
-    // (Optional) You can notify the client that funeral parlor has updated info
+    // Notify client
     if ($booking->client) {
         $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
         $message = "The funeral parlor ({$parlorName}) has updated the information for your booking #{$booking->id}.";
@@ -766,16 +933,21 @@ public function updateInfo(Request $request, $bookingId)
         );
     }
 
+    // Notify agent (if any)
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+        $clientName = $booking->client->name ?? 'the client';
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        $bookingUrl = route('agent.bookings.show', $booking->id);
 
-// Notify agent (if any) with a similar message
-if ($booking->agent) {
-    $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
-    $agentMessage = "The funeral parlor ({$parlorName}) has updated the information for booking #{$booking->id} assigned to your client.";
-    $booking->agent->notify(
-        new \App\Notifications\BookingStatusChanged($booking, $agentMessage)
-    );
-}
+        $agentMessage = "The funeral parlor <b>{$parlorName}</b> has updated the information for booking <b>#{$booking->id}</b> assigned to your client <b>{$clientName}</b>.";
 
+        if ($agentUser) {
+            $agentUser->notify(
+                new \App\Notifications\BookingStatusChanged($booking, $agentMessage, 'agent')
+            );
+        }
+    }
 
     // No status change here; only the client triggers the "for_review" status change.
 
@@ -783,6 +955,7 @@ if ($booking->agent) {
         ->route('funeral.bookings.show', $booking->id)
         ->with('success', 'Personal & service details have been updated for this booking.');
 }
+
 
 // PHASE 3 FORM: Info of the Dead (Funeral Parlor Side)
 public function editInfo($bookingId)

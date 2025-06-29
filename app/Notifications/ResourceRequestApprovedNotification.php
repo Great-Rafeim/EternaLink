@@ -54,12 +54,14 @@ class ResourceRequestApprovedNotification extends Notification implements Should
             return (new MailMessage)
                 ->subject('Request Approved')
                 ->line("You approved the request for $item from {$this->resourceRequest->requester->name}.")
-                ->action('View Request', $url);
+                ->action('View Request', $url)
+                ->salutation('Regards,<br>EternaLink');
         } else {
             return (new MailMessage)
                 ->subject('Your Request was Approved')
                 ->line("Your request for $item has been approved by {$this->resourceRequest->provider->name}.")
-                ->action('View Request', $url);
+                ->action('View Request', $url)
+                ->salutation('Regards,<br>EternaLink');
         }
     }
 }

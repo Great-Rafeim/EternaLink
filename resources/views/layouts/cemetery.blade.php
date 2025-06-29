@@ -154,7 +154,7 @@
                         <li class="fw-bold text-secondary px-2 mb-2">Notifications</li>
                         @forelse(auth()->user()->unreadNotifications->take(8) as $notification)
                             <li>
-                                <a href="{{ route('cemetery.notifications.redirect', $notification->id) }}"
+                                <a href="{{ route('notifications.redirect', $notification->id) }}"
                                    class="dropdown-item d-flex flex-column small py-2 {{ $notification->read_at ? '' : 'bg-light' }}"
                                    style="white-space: normal;">
                                     <span>{!! $notification->data['message'] ?? 'Notification' !!}</span>
@@ -166,7 +166,7 @@
                         @endforelse
                         <li><hr class="dropdown-divider"></li>
                         <li>
-                            <a class="dropdown-item text-center" href="{{ route('cemetery.notifications.index') }}">
+                            <a class="dropdown-item text-center" href="{{ route('notifications.index') }}">
                                 View All Notifications
                             </a>
                         </li>

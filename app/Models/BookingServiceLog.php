@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Hashidable;
 
 class BookingServiceLog extends Model
 {
@@ -21,8 +22,8 @@ class BookingServiceLog extends Model
         return $this->belongsTo(Booking::class);
     }
 
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
+public function user()
+{
+    return $this->belongsTo(\App\Models\User::class, 'user_id');
+}
 }

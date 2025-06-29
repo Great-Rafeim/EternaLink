@@ -89,7 +89,7 @@
                         $canReturnEarly = $isRequester && $r->status === 'in_use' && $now->lt($end);
                         $canProviderCancel = $isProvider && $r->status === 'reserved' && $now->lt($start);
                         // Mark as Received ONLY if status is 'completed'
-                        $canMarkAsReceived = $isProvider && $r->status === 'completed' && $now->gte($r->reserved_end);
+                        $canMarkAsReceived = $isProvider && $r->status === 'for_return' && $now->gte($r->reserved_end);
                     @endphp
                     <tr>
                         <td>
@@ -146,16 +146,18 @@
                         </td>
                         <td>{{ $r->reserved_end ? $r->reserved_end->format('Y-m-d H:i') : '-' }}</td>
                         <td>
-                            <span class="badge 
-                                {{ 
-                                    $r->status == 'reserved' ? 'bg-warning' : 
-                                    ($r->status == 'in_use' ? 'bg-info' :
-                                    ($r->status == 'completed' ? 'bg-success' :
-                                    ($r->status == 'closed' ? 'bg-dark text-white' :
-                                    ($r->status == 'available' ? 'bg-primary' : 'bg-secondary'))))
-                                }}">
-                                {{ ucfirst(str_replace('_', ' ', $r->status)) }}
-                            </span>
+<span class="badge 
+    {{ 
+        $r->status == 'reserved' ? 'bg-warning' : 
+        ($r->status == 'in_use' ? 'bg-info' :
+        ($r->status == 'for_return' ? 'bg-primary' :
+        ($r->status == 'completed' ? 'bg-success' :
+        ($r->status == 'closed' ? 'bg-dark text-white' :
+        ($r->status == 'available' ? 'bg-primary' : 'bg-secondary')))))
+    }}">
+    {{ $r->status == 'for_return' ? 'For Return' : ucfirst(str_replace('_', ' ', $r->status)) }}
+</span>
+
                         </td>
                         <td>{{ $r->creator->name ?? 'N/A' }}</td>
 <td>
