@@ -185,13 +185,17 @@
                                         <i class="bi bi-clock-history me-1"></i>
                                         {{ $booking->updated_at->format('M d, Y') }}
                                     </td>
-                                    <td class="text-center">
-                                        <a href="{{ route('funeral.bookings.show', $booking->id) }}"
-                                           class="btn btn-outline-primary btn-sm rounded-pill px-2">
-                                            <i class="bi bi-eye"></i>
-                                            <span class="visually-hidden">View</span>
-                                        </a>
-                                    </td>
+<td class="text-center">
+    <a href="{{ $booking->status === 'pending' 
+            ? route('funeral.bookings.showBooking', $booking->id) 
+            : route('funeral.bookings.show', $booking->id) }}"
+       class="btn btn-outline-primary btn-sm rounded-pill px-2">
+        <i class="bi bi-eye"></i>
+        <span class="visually-hidden">View</span>
+    </a>
+</td>
+
+
                                 </tr>
                             @empty
                                 <tr>

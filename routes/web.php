@@ -135,6 +135,16 @@ Route::middleware(['auth', '2fa'])->group(function () {
     })->name('dashboard');
 });
 
+Route::get('/debug-notify', function() {
+    return [
+        'queue.default' => config('queue.default'),
+        'env.QUEUE_CONNECTION' => env('QUEUE_CONNECTION'),
+        'notification_queue' => config('notifications.queue', null),
+        'queue.connections' => config('queue.connections'),
+    ];
+});
+
+
 Route::middleware(['auth', '2fa', 'verified', 'role:admin'])->group(function () {
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
 });
@@ -241,6 +251,8 @@ Route::prefix('funeral')
 
         // Inventory Categories
         Route::resource('categories', InventoryCategoryController::class);
+        Route::get('/funeral/categories/ajax', [InventoryCategoryController::class, 'ajaxIndex'])->name('categories.ajax');
+
 
         // Resource Sharing
         Route::get('/funeral/resource-requests/request/{id}', [ResourceShareController::class, 'showShareableItems'])->name('partnerships.resource_requests.request');
@@ -264,6 +276,7 @@ Route::prefix('funeral')
         Route::get('/bookings/{booking}/details/pdf', [BookingDetailPreviewController::class, 'exportPdf'])->name('bookings.exportPdf');
 
         Route::get('/bookings/{booking}', [FuneralDashboardController::class, 'show'])->name('bookings.show');
+        Route::get('/funeral/bookings/{booking}/show-request', [FuneralDashboardController::class, 'showBooking'])->name('bookings.showBooking');
         Route::patch('/bookings/{booking}/approve', [FuneralDashboardController::class, 'approve'])->name('bookings.approve');
         Route::patch('/bookings/{booking}/deny', [FuneralDashboardController::class, 'deny'])->name('bookings.deny');
         Route::patch('/bookings/{booking}/accept', [FuneralDashboardController::class, 'accept'])->name('bookings.accept');

@@ -5,6 +5,8 @@
             padding-left: 1.7rem;
             margin-bottom: 0;
         }
+
+        
         .timeline-item {
             border-left: 2px solid #0d6efd33;
             margin-left: 0.5rem;
@@ -41,7 +43,6 @@
         .section-card {
             border-radius: 0.5rem !important;
             box-shadow: 0 1px 8px #0d6efd10;
-            border: 1px solid #e7eaf0;
             max-width: 900px;
             margin: 0 auto 2rem auto;
         }

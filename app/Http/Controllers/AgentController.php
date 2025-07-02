@@ -34,48 +34,100 @@ class AgentController extends Controller
     }
 
     // 2. Invite/Send Signed URL to Agent
-    public function invite(Request $request)
-    {
-        $request->validate([
-            'email' => ['required', 'email', 'unique:users,email'],
-        ]);
+public function invite(Request $request)
+{
+    \Log::debug('Invite request received', [
+        'request_data' => $request->all(),
+        'initiator_id' => auth()->id(),
+    ]);
 
-        $email = $request->email;
-        $funeralUser = auth()->user();
+    $request->validate([
+        'email' => ['required', 'email'],
+    ]);
 
-        $inviteData = [
-            'email' => $email,
+    $email = $request->email;
+    $funeralUser = auth()->user();
+
+    // 1. Check if the user exists
+    $existingUser = \App\Models\User::where('email', $email)->first();
+
+    if ($existingUser) {
+        if ($existingUser->role !== 'agent') {
+            return back()->with('error', 'The email belongs to an existing user who is not an agent.');
+        }
+        // 2. Check if already linked to this parlor
+        $alreadyLinked = \DB::table('funeral_home_agent')
+            ->where('funeral_user_id', $funeralUser->id)
+            ->where('agent_user_id', $existingUser->id)
+            ->exists();
+        if ($alreadyLinked) {
+            return back()->with('error', 'This agent is already linked to your funeral parlor.');
+        }
+        // Do NOT link yet! Just log intent.
+        \Log::info('Agent exists and not yet linked to this parlor. Invitation email will be sent.', [
             'funeral_user_id' => $funeralUser->id,
-            'invite_token' => Str::random(32),
-        ];
-
-        $signedUrl = URL::temporarySignedRoute(
-            'agents.accept-invite',
-            now()->addHours(48),
-            ['invite' => base64_encode(json_encode($inviteData))]
-        );
-
-        \Log::info('Agent Invitation Generated', [
-            'funeral_home_id' => $funeralUser->id,
-            'funeral_email' => $funeralUser->email,
-            'invited_email' => $email,
-            'signed_url' => $signedUrl,
-            'invite_token' => $inviteData['invite_token'],
-            'expires_at' => now()->addHours(48)->toDateTimeString(),
-        ]);
-
-        Mail::to($email)->send(new AgentInvitationMail($signedUrl, $funeralUser));
-
-        \Log::info('Agent Invitation Sent', [
-            'funeral_home_id' => $funeralUser->id,
-            'funeral_email' => $funeralUser->email,
+            'agent_user_id' => $existingUser->id,
             'invited_email' => $email,
         ]);
-
-        return back()->with('success', 'Invitation sent successfully.');
+    } else {
+        // No user yet; invitation will lead to account creation
+        \Log::info('No user found, invite will create new agent account', [
+            'invited_email' => $email,
+        ]);
     }
 
-// 3. Accept Invite + Complete Registration (GET and POST)
+    // Always generate an invite URL for consistency (for both new and existing)
+    $inviteData = [
+        'email' => $email,
+        'funeral_user_id' => $funeralUser->id,
+        'invite_token' => Str::random(32),
+    ];
+
+    \Log::debug('Invite data prepared', $inviteData);
+
+    $signedUrl = URL::temporarySignedRoute(
+        'agents.accept-invite',
+        now()->addHours(48),
+        ['invite' => base64_encode(json_encode($inviteData))]
+    );
+
+    \Log::info('Agent Invitation Signed URL Generated', [
+        'funeral_home_id' => $funeralUser->id,
+        'funeral_email' => $funeralUser->email,
+        'invited_email' => $email,
+        'signed_url' => $signedUrl,
+        'invite_token' => $inviteData['invite_token'],
+        'expires_at' => now()->addHours(48)->toDateTimeString(),
+    ]);
+
+    try {
+        Mail::to($email)->send(new AgentInvitationMail($signedUrl, $funeralUser));
+        \Log::info('Agent Invitation Email Sent', [
+            'funeral_home_id' => $funeralUser->id,
+            'funeral_email' => $funeralUser->email,
+            'invited_email' => $email,
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Failed to send agent invitation email', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'invited_email' => $email,
+            'signed_url' => $signedUrl,
+        ]);
+        return back()->with('error', 'Failed to send invitation email. Please try again.');
+    }
+
+    \Log::debug('Invite function completed', [
+        'result' => 'success',
+        'invited_email' => $email,
+    ]);
+
+    return back()->with('success', 'Invitation sent successfully.');
+}
+
+
+
+
 public function acceptInvite(Request $request, $invite)
 {
     \Log::info('Agent Invite Link Accessed or Submitted', [
@@ -96,34 +148,76 @@ public function acceptInvite(Request $request, $invite)
     }
 
     $data = json_decode(base64_decode($invite), true);
+    $funeralUserId = $data['funeral_user_id'];
+    $email = $data['email'];
 
+    // --- Check if agent user already exists
+    $existingUser = \App\Models\User::where('email', $email)->first();
+
+    if ($existingUser) {
+        // If not agent, block
+        if ($existingUser->role !== 'agent') {
+            \Log::warning('Agent Complete Invite - Email Registered but not agent', [
+                'email' => $email,
+            ]);
+            return redirect()->route('login')->with('error', 'This email is already registered but not as an agent.');
+        }
+
+        // If agent, check if already linked
+        $alreadyLinked = \DB::table('funeral_home_agent')
+            ->where('funeral_user_id', $funeralUserId)
+            ->where('agent_user_id', $existingUser->id)
+            ->exists();
+
+        if (! $alreadyLinked) {
+            // Link the agent to this funeral home (status: active)
+            \DB::table('funeral_home_agent')->insert([
+                'funeral_user_id' => $funeralUserId,
+                'agent_user_id' => $existingUser->id,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            \Log::info('Existing agent linked to new funeral parlor via invite.', [
+                'agent_user_id' => $existingUser->id,
+                'funeral_user_id' => $funeralUserId,
+            ]);
+        } else {
+            \Log::info('Agent already linked to this funeral parlor, skipping insert.', [
+                'agent_user_id' => $existingUser->id,
+                'funeral_user_id' => $funeralUserId,
+            ]);
+        }
+
+        // Log the user in (if not already logged in)
+        if (!auth()->check() || auth()->id() !== $existingUser->id) {
+            auth()->login($existingUser);
+        }
+
+        return redirect()->route('agent.dashboard')
+            ->with('success', 'You are now linked to the funeral parlor and redirected to your dashboard.');
+    }
+
+    // --- Show registration form for new agent
     if ($request->isMethod('get')) {
-        // Show the registration form
         return view('funeral.agents.accept-invite', [
-            'email' => $data['email'],
+            'email' => $email,
             'invite' => $invite,
         ]);
     }
 
+    // --- POST: Registration for new agent
     $request->validate([
         'name' => ['required', 'string', 'max:255'],
         'password' => ['required', 'string', 'min:8', 'confirmed'],
     ]);
-
-    $existingUser = \App\Models\User::where('email', $data['email'])->first();
-    if ($existingUser) {
-        \Log::warning('Agent Complete Invite - Email Already Registered', [
-            'email' => $data['email'],
-        ]);
-        return redirect()->route('login')->with('error', 'This email is already registered. Please log in.');
-    }
 
     \DB::beginTransaction();
 
     try {
         $agent = \App\Models\User::create([
             'name' => $request->name,
-            'email' => $data['email'],
+            'email' => $email,
             'password' => \Hash::make($request->password),
             'role' => 'agent',
             'remember_token' => \Str::random(10),
@@ -131,14 +225,14 @@ public function acceptInvite(Request $request, $invite)
 
         // Link to funeral parlor via pivot table with status = active
         \DB::table('funeral_home_agent')->insert([
-            'funeral_user_id' => $data['funeral_user_id'],
+            'funeral_user_id' => $funeralUserId,
             'agent_user_id'   => $agent->id,
             'status'          => 'active',
             'created_at'      => now(),
             'updated_at'      => now(),
         ]);
 
-        // --- Update booking_agents table for THIS booking only ---
+        // --- (Optional) Update booking_agents table for THIS booking only ---
         if (!empty($data['booking_id'])) {
             \DB::table('booking_agents')
                 ->where('booking_id', $data['booking_id'])
@@ -168,14 +262,14 @@ public function acceptInvite(Request $request, $invite)
         \Log::info('Agent Registered and Linked to booking', [
             'agent_id' => $agent->id,
             'agent_email' => $agent->email,
-            'funeral_home_id' => $data['funeral_user_id'],
+            'funeral_home_id' => $funeralUserId,
             'client_user_id' => $data['client_user_id'] ?? null,
             'booking_id' => $data['booking_id'] ?? null,
         ]);
 
         auth()->login($agent);
 
-        return redirect()->route('dashboard')->with('success', 'Welcome! Your agent account has been created.');
+        return redirect()->route('agent.dashboard')->with('success', 'Welcome! Your agent account has been created.');
     } catch (\Exception $e) {
         \DB::rollBack();
         \Log::error('Agent Invite Registration Failed', [
@@ -184,6 +278,7 @@ public function acceptInvite(Request $request, $invite)
         return back()->with('error', 'There was a problem creating your agent account. Please try again.');
     }
 }
+
 
 
 
@@ -324,17 +419,27 @@ public function assignFuneralAgent(Request $request, $bookingId)
 
     $booking = \App\Models\Booking::findOrFail($bookingId);
 
-    // Ensure the agent belongs to this funeral home and is not assigned to another booking
-    $isAvailable = \DB::table('funeral_home_agent')
+    // 1. Ensure the agent belongs to this funeral home and is active
+    $isLinked = \DB::table('funeral_home_agent')
         ->where('funeral_user_id', $booking->funeral_home_id)
         ->where('agent_user_id', $request->agent_user_id)
         ->where('status', 'active')
-        ->exists()
-        &&
-        !\DB::table('booking_agents')->where('agent_user_id', $request->agent_user_id)->exists();
+        ->exists();
 
-    if (!$isAvailable) {
-        return back()->with('error', 'Selected agent is either not registered to this funeral parlor or already assigned.');
+    // 2. Ensure the agent is not assigned to another booking for this funeral parlor (ignore bookings from other parlors)
+    $isAssignedToThisParlor = \DB::table('booking_agents')
+        ->join('bookings', 'booking_agents.booking_id', '=', 'bookings.id')
+        ->where('booking_agents.agent_user_id', $request->agent_user_id)
+        ->where('bookings.funeral_home_id', $booking->funeral_home_id)
+        ->where('booking_agents.booking_id', '!=', $booking->id) // Allow reassignment to THIS booking
+        ->exists();
+
+    if (!$isLinked) {
+        return back()->with('error', 'Selected agent is not registered to this funeral parlor.');
+    }
+
+    if ($isAssignedToThisParlor) {
+        return back()->with('error', 'Selected agent is already assigned to another booking for this funeral parlor.');
     }
 
     $booking->bookingAgent()->updateOrCreate(
@@ -344,6 +449,7 @@ public function assignFuneralAgent(Request $request, $bookingId)
 
     return back()->with('success', 'Agent assigned to this booking successfully.');
 }
+
 
 
 

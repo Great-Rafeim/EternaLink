@@ -26,14 +26,16 @@
                     <input type="text" name="search" value="{{ request('search') }}" class="form-control" placeholder="Search by name or brand">
                 </div>
                 <div class="col-md-3">
-                    <select name="category" class="form-select">
-                        <option value="all" {{ request('category', 'all') == 'all' ? 'selected' : '' }}>All Categories</option>
-                        @foreach ($categories as $category)
-                            <option value="{{ $category->id }}" {{ request('category') == $category->id ? 'selected' : '' }}>
-                                {{ $category->name }}
-                            </option>
-                        @endforeach
-                    </select>
+<select name="category" class="form-select">
+    <option value="all" {{ request('category', 'all') == 'all' ? 'selected' : '' }}>All Categories</option>
+    <option value="none" {{ request('category') == 'none' ? 'selected' : '' }}>Uncategorized</option>
+    @foreach ($categories as $category)
+        <option value="{{ $category->id }}" {{ request('category') == $category->id ? 'selected' : '' }}>
+            {{ $category->name }}
+        </option>
+    @endforeach
+</select>
+
                 </div>
                 <div class="col-md-3">
                     <select name="status" class="form-select">

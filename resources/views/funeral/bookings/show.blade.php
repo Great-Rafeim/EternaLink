@@ -370,66 +370,82 @@
 
                         {{-- PACKAGE ITEM LIST --}}
 <h5 class="mb-3"><i class="bi bi-box"></i> Package Inclusions</h5>
-<ul class="list-group mb-2">
-    <li class="list-group-item bg-light py-2">
-        <strong class="text-primary"><i class="bi bi-droplet-half me-1"></i>Items</strong>
-    </li>
-    <li class="list-group-item d-flex fw-bold bg-light border-bottom-0">
-        <span class="flex-fill">Item</span>
-        <span class="flex-fill">Category</span>
-        <span class="flex-fill">Brand</span>
-        <span style="width:80px;">Qty</span>
-    </li>
-    @php
-        // Filter consumables (is_asset == false)
-        $consumables = collect($packageItems)->filter(fn($pkg) => !($pkg['is_asset'] ?? false));
-        // Filter assets (is_asset == true)
-        $assets = collect($packageItems)->filter(fn($pkg) => $pkg['is_asset'] ?? false);
-        // Collect asset category IDs already listed
-        $assetCategoryIdsInItems = $assets->pluck('category_id')->unique()->toArray();
-    @endphp
-    @forelse($consumables as $pkg)
-        <li class="list-group-item d-flex">
-            <span class="flex-fill">{{ $pkg['item'] }}</span>
-            <span class="flex-fill">{{ $pkg['category'] }}</span>
-            <span class="flex-fill">{{ $pkg['brand'] }}</span>
-            <span style="width:80px;">{{ $pkg['quantity'] }}</span>
-        </li>
-    @empty
-        <li class="list-group-item text-muted fst-italic">No consumable items included.</li>
-    @endforelse
 
-    <li class="list-group-item bg-light py-2 mt-2">
-        <strong class="text-secondary"><i class="bi bi-truck-front me-1"></i>Bookable Assets/Items</strong>
-    </li>
-    <li class="list-group-item d-flex fw-bold bg-light border-bottom-0">
-        <span class="flex-fill">Asset/Item</span>
-    </li>
-    @forelse($assets as $pkg)
-        <li class="list-group-item d-flex bg-secondary bg-opacity-25">
-            <span class="flex-fill">
-                {{ $pkg['item'] }}
-                <span class="badge bg-secondary ms-1">Asset</span>
-            </span>
-            <span class="flex-fill">{{ $pkg['category'] }}</span>
-            <span class="flex-fill">{{ $pkg['brand'] }}</span>
-            <span style="width:80px;">{{ $pkg['quantity'] }}</span>
-        </li>
-    @empty
-        {{-- If no asset items, this block will be skipped and asset categories will still be listed below --}}
-    @endforelse
+{{-- Consumable Items Table --}}
+<div class="table-responsive mb-4">
+    <table class="table table-bordered align-middle mb-0">
+        <thead class="table-light">
+            <tr>
+                <th colspan="4" class="bg-light text-primary">
+                    <i class="bi bi-droplet-half me-1"></i>Items
+                </th>
+            </tr>
+            <tr>
+                <th>Item</th>
+                <th>Category</th>
+                <th>Brand</th>
+                <th style="width:80px;">Qty</th>
+            </tr>
+        </thead>
+        <tbody>
+        @php
+            $consumables = collect($packageItems)->filter(fn($pkg) => !($pkg['is_asset'] ?? false));
+        @endphp
+        @forelse($consumables as $pkg)
+            <tr>
+                <td>{{ $pkg['item'] }}</td>
+                <td>{{ $pkg['category'] }}</td>
+                <td>{{ $pkg['brand'] }}</td>
+                <td>{{ $pkg['quantity'] }}</td>
+            </tr>
+        @empty
+            <tr>
+                <td colspan="4" class="text-muted fst-italic">No consumable items included.</td>
+            </tr>
+        @endforelse
+        </tbody>
+    </table>
+</div>
 
-    {{-- Show asset categories with no assigned item --}}
-    @foreach($assetCategories ?? [] as $assetCategory)
-        @if(!in_array($assetCategory->id, $assetCategoryIdsInItems))
-            <li class="list-group-item d-flex bg-secondary bg-opacity-25">
-                <span class="flex-fill">
-                    <span class="fw-semibold">{{ $assetCategory->name }}</span>
-                </span>
-            </li>
-        @endif
-    @endforeach
-</ul>
+{{-- Assets Table (single column) --}}
+<div class="table-responsive mb-2">
+    <table class="table table-bordered align-middle mb-0">
+        <thead class="table-light">
+            <tr>
+                <th class="bg-light text-secondary">
+                    <i class="bi bi-truck-front me-1"></i>Bookable Assets/Items
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+        @php
+            $assets = collect($packageItems)->filter(fn($pkg) => $pkg['is_asset'] ?? false);
+            $assetCategoryIdsInItems = $assets->pluck('category_id')->unique()->toArray();
+        @endphp
+        @forelse($assets as $pkg)
+            <tr class="bg-secondary bg-opacity-25">
+                <td>
+                    {{ $pkg['item'] }}
+                    <span class="badge bg-secondary ms-1">Asset</span>
+                </td>
+            </tr>
+        @empty
+            {{-- No asset rows, but still may have empty asset categories listed below --}}
+        @endforelse
+        {{-- Show asset categories with no assigned item --}}
+        @foreach($assetCategories ?? [] as $assetCategory)
+            @if(!in_array($assetCategory->id, $assetCategoryIdsInItems))
+                <tr class="bg-secondary bg-opacity-25">
+                    <td>
+                        <span class="fw-semibold">{{ $assetCategory->name }}</span>
+                        <span class="badge bg-secondary ms-1">Asset</span>
+                    </td>
+                </tr>
+            @endif
+        @endforeach
+        </tbody>
+    </table>
+</div>
 
 {{-- SECTION: Deceased Personal Details --}}
 <h5 class="mb-2"><i class="bi bi-person-vcard"></i> Deceased Personal Details</h5>

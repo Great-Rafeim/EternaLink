@@ -85,10 +85,9 @@ public function edit(Plot $plot)
         abort(403, 'Unauthorized');
     }
 
+    // Only load occupation history, no reservations
     $plot->load([
-        'reservation',
         'occupation',
-        'reservationHistory',
         'occupationHistory'
     ]);
 
@@ -100,6 +99,7 @@ public function edit(Plot $plot)
 
     return view('cemetery.plots.edit', compact('plot', 'reservedDetail'));
 }
+
 
 
     public function update(Request $request, Plot $plot)

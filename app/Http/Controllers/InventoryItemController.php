@@ -11,40 +11,68 @@ use Illuminate\Http\Request;
 
 class InventoryItemController extends Controller
 {
-    public function index(Request $request)
-    {
-        $query = InventoryItem::with('category')
-            ->where('funeral_home_id', auth()->id());
 
-        $request->validate([
-            'search'   => 'nullable|string|max:100',
-            'status'   => 'nullable|in:all,available,in_use,maintenance',
-            'category' => 'nullable|string|max:20',
-        ]);
+    
+public function index(Request $request)
+{
+    $query = InventoryItem::with('category')
+        ->where('inventory_items.funeral_home_id', auth()->id()); // Specify table
 
-        if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('brand', 'like', "%{$search}%");
-            });
-        }
+    $request->validate([
+        'search'   => 'nullable|string|max:100',
+        'status'   => 'nullable|in:all,available,in_use,maintenance',
+        'category' => 'nullable|string|max:20',
+        'sort'     => 'nullable|string|max:50',
+        'direction'=> 'nullable|in:asc,desc',
+    ]);
 
-        if ($request->filled('status') && $request->input('status') !== 'all') {
-            $query->where('status', $request->input('status'));
-        }
-
-        if ($request->filled('category') && $request->input('category') !== 'all') {
-            $query->where('inventory_category_id', $request->input('category'));
-        }
-
-        $categories = InventoryCategory::where('funeral_home_id', auth()->id())
-            ->orderBy('name')->get();
-
-        $items = $query->paginate(15)->withQueryString();
-
-        return view('funeral.items.index', compact('items', 'categories'));
+    // Filtering logic (unchanged, but table-qualified where needed)
+    if ($request->filled('search')) {
+        $search = $request->input('search');
+        $query->where(function ($q) use ($search) {
+            $q->where('inventory_items.name', 'like', "%{$search}%")
+              ->orWhere('inventory_items.brand', 'like', "%{$search}%");
+        });
     }
+    if ($request->filled('status') && $request->input('status') !== 'all') {
+        $query->where('inventory_items.status', $request->input('status'));
+    }
+    if ($request->filled('category') && $request->input('category') !== 'all') {
+        if ($request->input('category') === 'none') {
+            $query->whereNull('inventory_items.inventory_category_id');
+        } elseif (is_numeric($request->input('category'))) {
+            $query->where('inventory_items.inventory_category_id', (int) $request->input('category'));
+        }
+    }
+
+    $sortable = [
+        'name', 'brand', 'quantity', 'low_stock_threshold', 'price', 'selling_price', 'expiry_date', 'status', 'shareable_quantity'
+    ];
+
+    if ($request->filled('sort') && in_array($request->input('sort'), $sortable)) {
+        $sort = $request->input('sort');
+        $direction = $request->input('direction', 'asc');
+        $query->orderBy("inventory_items.$sort", $direction); // Table qualified
+    } elseif ($request->input('sort') === 'category') {
+        $direction = $request->input('direction', 'asc');
+        $query->leftJoin('inventory_categories as cat', 'cat.id', '=', 'inventory_items.inventory_category_id')
+            ->where('inventory_items.funeral_home_id', auth()->id()) // Table qualified
+            ->orderBy('cat.name', $direction)
+            ->select('inventory_items.*');
+    } else {
+        $query->orderBy('inventory_items.name', 'asc'); // Table qualified, default ascending
+    }
+
+    $categories = InventoryCategory::where('funeral_home_id', auth()->id())
+        ->orderBy('name')->get();
+
+    $items = $query->paginate(15)->withQueryString();
+
+    return view('funeral.items.index', compact('items', 'categories'));
+}
+
+
+
 
     public function create()
     {

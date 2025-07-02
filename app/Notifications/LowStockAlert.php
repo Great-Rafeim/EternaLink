@@ -8,9 +8,8 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\DatabaseMessage;
 
-class LowStockAlert extends Notification implements ShouldQueue
+class LowStockAlert extends Notification
 {
-    use Queueable;
 
     public $item;
 

@@ -60,6 +60,10 @@ public function cemeteryBooking()
     {
         return $this->belongsTo(User::class, 'agent_user_id');
     }
+    public function clientUser()
+{
+    return $this->belongsTo(\App\Models\User::class, 'client_user_id');
+}
 
     public function detail()
     {

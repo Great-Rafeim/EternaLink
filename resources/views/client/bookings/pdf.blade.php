@@ -224,7 +224,7 @@
                 @if(!in_array($assetCategory->id, $assetCategoryIdsInItems))
                     <tr class="to-be-decided-row">
                         <td colspan="4">
-                            Asset to be decided: <span class="fw-bold">{{ $assetCategory->name }}</span>
+                            <span class="fw-bold">{{ $assetCategory->name }}</span>
                         </td>
                     </tr>
                 @endif

@@ -387,9 +387,11 @@ document.addEventListener('DOMContentLoaded', function () {
             @endphp
 
             <div class="col-md-4">
-                <label class="form-label">Total Amount <span class="text-danger">*</span></label>
-                <input type="number" name="amount" id="totalAmount" class="form-control"
-                    value="{{ old('amount', $amount) }}" readonly required>
+<div class="col-md-4">
+    <label class="form-label">Total Amount <span class="text-danger">*</span></label>
+    <input type="number" name="amount" id="totalAmount" class="form-control"
+        value="{{ old('amount', $totalAmount) }}" readonly required>
+</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Payment Method <span class="text-danger">*</span></label>

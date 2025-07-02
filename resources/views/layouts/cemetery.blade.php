@@ -21,102 +21,103 @@
     <!-- Custom Styles -->
     <style>[x-cloak] { display: none !important; }</style>
     <style>
-        body {
-            background: #22272e;
-            color: #f7fafc;
-            min-height: 100vh;
-            font-family: 'Figtree', sans-serif;
-        }
-        .navbar {
-            background-color: #252b33 !important;
-        }
-        .navbar-brand,
-        .nav-link,
-        .dropdown-toggle {
-            color: #f7fafc !important;
-        }
-        .nav-link.active,
-        .nav-link:hover {
-            color: #4ade80 !important; /* green accent */
-        }
-        header, footer {
-            background-color: #252b33 !important;
-        }
-        footer {
-            color: #bbb;
-        }
-        .sidebar {
-            min-height: 100vh;
-            background: #23282f;
-            border-right: 1px solid #21262c;
-        }
-        .sidebar .nav-link {
-            color: #f7fafc !important;
-            border-radius: 0.5rem;
-            margin-right: 0.25rem;
-            margin-left: 0.25rem;
-        }
-        .sidebar .nav-link.active,
-        .sidebar .nav-link:hover {
-            background: #23382e;
-            color: #4ade80 !important;
-        }
-        .sidebar .nav-link.active {
-            font-weight: 600;
-            background: #1e293b !important;
-        }
-        @media (max-width: 991.98px) {
-            .sidebar {
-                min-height: auto;
-                position: fixed;
-                top: 56px;
-                left: 0;
-                height: 100%;
-                z-index: 1040;
-                transform: translateX(-100%);
-                transition: transform 0.2s;
-                width: 220px;
-                box-shadow: 2px 0 10px rgba(0,0,0,0.13);
-            }
-            .sidebar.show-sidebar {
-                transform: translateX(0);
-            }
-            .sidebar-backdrop {
-                display: block;
-                position: fixed;
-                top: 56px;
-                left: 0;
-                width: 100vw;
-                height: 100vh;
-                background: rgba(0,0,0,0.3);
-                z-index: 1039;
-            }
-        }
-        .form-control, .form-select {
-            background: #21262c;
-            border-color: #2d3748;
-            color: #f7fafc;
-        }
-        .form-control:focus, .form-select:focus {
-            background: #252b33;
-            color: #fff;
-            border-color: #4ade80;
-            box-shadow: none;
-        }
-        .dropdown-menu {
-            background: #23282f;
-            color: #f7fafc;
-        }
-        .dropdown-item {
-            color: #f7fafc;
-        }
-        .dropdown-item:hover, .dropdown-item.active {
-            background: #23382e;
-            color: #4ade80;
-        }
-        .bg-success, .bg-danger {
-            color: #fff !important;
-        }
+body {
+    background: #22272e;
+    color: #f7fafc;
+    min-height: 100vh;
+    font-family: 'Figtree', sans-serif;
+}
+.navbar {
+    background-color: #252b33 !important;
+}
+.navbar-brand,
+.nav-link,
+.dropdown-toggle {
+    color: #f7fafc !important;
+}
+.nav-link.active,
+.nav-link:hover {
+    color: #60a5fa !important; /* blue accent instead of green */
+}
+header, footer {
+    background-color: #252b33 !important;
+}
+footer {
+    color: #bbb;
+}
+.sidebar {
+    min-height: 100vh;
+    background: #23282f;
+    border-right: 1px solid #21262c;
+}
+.sidebar .nav-link {
+    color: #f7fafc !important;
+    border-radius: 0.5rem;
+    margin-right: 0.25rem;
+    margin-left: 0.25rem;
+}
+.sidebar .nav-link.active,
+.sidebar .nav-link:hover {
+    background: #1e293b;
+    color: #60a5fa !important; /* blue accent */
+}
+.sidebar .nav-link.active {
+    font-weight: 600;
+    background: #1e293b !important;
+}
+@media (max-width: 991.98px) {
+    .sidebar {
+        min-height: auto;
+        position: fixed;
+        top: 56px;
+        left: 0;
+        height: 100%;
+        z-index: 1040;
+        transform: translateX(-100%);
+        transition: transform 0.2s;
+        width: 220px;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.13);
+    }
+    .sidebar.show-sidebar {
+        transform: translateX(0);
+    }
+    .sidebar-backdrop {
+        display: block;
+        position: fixed;
+        top: 56px;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0,0,0,0.3);
+        z-index: 1039;
+    }
+}
+.form-control, .form-select {
+    background: #21262c;
+    border-color: #2d3748;
+    color: #f7fafc;
+}
+.form-control:focus, .form-select:focus {
+    background: #252b33;
+    color: #fff;
+    border-color: #60a5fa; /* blue accent for focus */
+    box-shadow: none;
+}
+.dropdown-menu {
+    background: #f7fafc;
+    color: #f7fafc;
+}
+.dropdown-item {
+    color: #23282f;
+}
+.dropdown-item:hover, .dropdown-item.active {
+    background: #f7fafc;
+    color: #60a5fa;
+}
+.bg-success, .bg-danger {
+    color: #fff !important;
+}
+
     </style>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
@@ -124,22 +125,17 @@
 
 <nav class="navbar navbar-expand-lg shadow-sm">
     <div class="container-fluid">
-
-        <!-- Sidebar Toggle (Hamburger) -->
         <button class="btn btn-dark d-lg-none me-2" id="sidebarToggle">
             <i class="bi bi-list" style="font-size: 1.5rem"></i>
         </button>
-
-        <a class="navbar-brand fw-bold" href="{{ route('cemetery.dashboard') }}">
-            EternaLink
+        <a class="navbar-brand fw-bold" href="{{ route('funeral.dashboard') }}">
+            FuneralParlor
         </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#cemeteryNavbar">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#funeralNavbar">
             <span class="navbar-toggler-icon"></span>
         </button>
-
-        <div class="collapse navbar-collapse justify-content-end" id="cemeteryNavbar">
+        <div class="collapse navbar-collapse justify-content-end" id="funeralNavbar">
             <ul class="navbar-nav ms-auto align-items-center">
-
                 <!-- Notification Bell -->
                 <li class="nav-item dropdown">
                     <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -172,7 +168,6 @@
                         </li>
                     </ul>
                 </li>
-
                 <!-- Profile Dropdown -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button"
@@ -183,11 +178,6 @@
                         <li>
                             <a class="dropdown-item" href="{{ route('profile.edit') }}">
                                 <i class="bi bi-gear me-2"></i> Profile
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="{{ route('cemetery.profile.edit') }}">
-                                <i class="bi bi-house-door me-2"></i> Cemetery Profile
                             </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
@@ -201,7 +191,6 @@
                         </li>
                     </ul>
                 </li>
-
             </ul>
         </div>
     </div>

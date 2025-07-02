@@ -15,6 +15,14 @@ use Carbon\Carbon;
 
 class FuneralDashboardController extends Controller
 {
+
+public function showBooking($id)
+{
+    $booking = Booking::findOrFail($id);
+    return view('funeral.bookings.showBookingRequest', compact('booking'));
+}
+
+
     // 1. DASHBOARD
     public function index()
     {
@@ -159,10 +167,14 @@ public function show(Booking $booking)
         ->get();
 
     // Available agents: Must belong to this parlor, be active, and not be assigned to another booking
-    $assignedAgentIds = \DB::table('booking_agents')
-        ->whereNotNull('agent_user_id')
-        ->pluck('agent_user_id')
-        ->toArray();
+// Get agent IDs that are assigned to bookings for THIS parlor only
+$assignedAgentIds = \DB::table('booking_agents')
+    ->join('bookings', 'booking_agents.booking_id', '=', 'bookings.id')
+    ->where('booking_agents.agent_user_id', '!=', null)
+    ->where('bookings.funeral_home_id', $booking->funeral_home_id)
+    ->pluck('booking_agents.agent_user_id')
+    ->toArray();
+
 
     $parlorAgents = \DB::table('users')
         ->join('funeral_home_agent', function ($join) use ($booking) {
@@ -472,6 +484,15 @@ public function startService(Booking $booking)
     $clientName  = $booking->client->name ?? 'the client';
     $parlorName  = $booking->funeralHome->name ?? 'Funeral Parlor';
 
+    // Log "Service started" to booking_service_logs table
+    \DB::table('booking_service_logs')->insert([
+        'booking_id' => $bookingId,
+        'user_id'    => auth()->id(),
+        'message'    => "Service started for booking #{$bookingId} ({$packageName}).",
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
     // Notify client
     if ($booking->client) {
         $msg = "The funeral service for <b>{$packageName}</b> (<b>Booking #{$bookingId}</b>) has <b>STARTED</b>.";
@@ -499,6 +520,7 @@ public function startService(Booking $booking)
 
     return back()->with('success', 'Service started. Status is now Ongoing.');
 }
+
 
 
 
@@ -655,7 +677,7 @@ public function customizationApprove(Request $request, $bookingId, $customizedPa
 // Deny customization request
 public function customizationDeny(Request $request, $bookingId, $customizedPackageId)
 {
-    $booking = Booking::where('funeral_home_id', auth()->id())->findOrFail($bookingId);
+    $booking = \App\Models\Booking::with(['funeralHome', 'client', 'bookingAgent'])->where('funeral_home_id', auth()->id())->findOrFail($bookingId);
 
     $customized = \App\Models\CustomizedPackage::where('id', $customizedPackageId)
         ->where('booking_id', $booking->id)
@@ -669,9 +691,12 @@ public function customizationDeny(Request $request, $bookingId, $customizedPacka
     $customized->status = 'denied';
     $customized->save();
 
+    $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+    $clientName = $booking->client->name ?? 'the client';
+
     // Notify client
+    $clientMsg = "Your request to customize the package for booking <b>#{$booking->id}</b> at <b>{$parlorName}</b> has been <b>DENIED</b> by the funeral parlor. Please contact support if you have questions.";
     if ($booking->client) {
-        $clientMsg = "Your request to customize the package for booking <b>#{$booking->id}</b> has been <b>DENIED</b> by the funeral parlor. Please contact support if you have questions.";
         $booking->client->notify(
             new \App\Notifications\CustomizationRequestDenied($booking, $customized, $clientMsg, 'client')
         );
@@ -680,8 +705,6 @@ public function customizationDeny(Request $request, $bookingId, $customizedPacka
     // Notify agent (if any)
     if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
         $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
-        $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
-        $clientName = $booking->client->name ?? 'the client';
         $agentMsg = "The customization request for booking <b>#{$booking->id}</b> for client <b>{$clientName}</b> at <b>{$parlorName}</b> was <b>DENIED</b> by the funeral parlor.";
         if ($agentUser) {
             $agentUser->notify(
@@ -690,7 +713,7 @@ public function customizationDeny(Request $request, $bookingId, $customizedPacka
         }
     }
 
-    return back()->with('success', 'Customization denied. Client notified.');
+    return back()->with('success', 'Customization denied. Client and agent notified.');
 }
 
 
@@ -716,17 +739,12 @@ public function updateOtherFees(Request $request, Booking $booking)
     $detail->other_fee = $validated['other_fee'];
     $detail->save();
 
-    // --- CALCULATE FINAL AMOUNT ---
-    $customized = $booking->customizedPackage;
-    if ($customized && $customized->status === 'approved') {
-        $packageTotal = $customized->custom_total_price;
-    } else {
-        $packageTotal = $booking->package->items->sum(function($item) {
-            return $item->pivot->quantity * ($item->selling_price ?? $item->price ?? 0);
-        });
-    }
+    // --- CALCULATE FINAL AMOUNT FROM booking_details ---
+    // Always trust booking_details.amount and booking_details.other_fee
+    $amount = floatval($detail->amount ?? 0);
+    $otherFee = floatval($detail->other_fee ?? 0);
+    $finalAmount = $amount + $otherFee;
 
-    $finalAmount = $packageTotal + ($detail->other_fee ?? 0);
     $booking->final_amount = $finalAmount;
 
     // Update booking status
@@ -754,6 +772,7 @@ public function updateOtherFees(Request $request, Booking $booking)
         ->route('funeral.bookings.show', $booking->id)
         ->with('success', 'Other fees updated and client notified. Booking is now in progress.');
 }
+
 
 
 public function updatePaymentRemarks(Request $request, Booking $booking)

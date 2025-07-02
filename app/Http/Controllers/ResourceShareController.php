@@ -11,8 +11,7 @@ use Illuminate\Support\Facades\Log;
 class ResourceShareController extends Controller
 {
 
-    // Show shareable items from partner parlors for a given item
-public function showShareableItems(Request $request, $itemId)   
+public function showShareableItems(Request $request, $itemId)
 {
     $item = InventoryItem::with('category')->findOrFail($itemId);
     $userId = auth()->id();
@@ -47,21 +46,43 @@ public function showShareableItems(Request $request, $itemId)
                     $cat2->where('is_asset', false);
                 })
                 ->where('shareable_quantity', '>', 0)
-                ->where('status', 'available'); // <--- for consumables
+                ->where('status', 'available');
             });
         })
         ->get();
 
-    // Fuzzy filter: show items with similar name or brand
+    // Improved loose/fuzzy filter
     $maxDistance = 3;
-    $shareableItems = $allCandidates->filter(function ($candidate) use ($search, $maxDistance) {
-        $distance = levenshtein(strtolower($candidate->name), strtolower($search));
-        if ($distance <= $maxDistance) return true;
+    $searchLower = strtolower($search);
+    $searchWords = preg_split('/[\s\-_]+/', $searchLower); // Split on spaces, hyphens, underscores
 
-        if ($candidate->brand) {
-            $brandDistance = levenshtein(strtolower($candidate->brand), strtolower($search));
-            if ($brandDistance <= $maxDistance) return true;
+    $shareableItems = $allCandidates->filter(function ($candidate) use ($searchLower, $searchWords, $maxDistance) {
+        $nameLower = strtolower($candidate->name);
+        $brandLower = strtolower($candidate->brand ?? '');
+
+        // 1. Exact or partial substring match
+        if (stripos($nameLower, $searchLower) !== false) return true;
+        if ($brandLower && stripos($brandLower, $searchLower) !== false) return true;
+
+        // 2. Any search word is in name/brand
+        foreach ($searchWords as $word) {
+            if (strlen($word) < 2) continue; // skip 1-letter noise
+            if (stripos($nameLower, $word) !== false) return true;
+            if ($brandLower && stripos($brandLower, $word) !== false) return true;
         }
+
+        // 3. Fuzzy levenshtein (allow typos)
+        if (levenshtein($nameLower, $searchLower) <= $maxDistance) return true;
+        if ($brandLower && levenshtein($brandLower, $searchLower) <= $maxDistance) return true;
+
+        // 4. Word-by-word fuzzy match
+        $nameWords = preg_split('/[\s\-_]+/', $nameLower);
+        foreach ($searchWords as $sw) {
+            foreach ($nameWords as $nw) {
+                if (strlen($sw) > 2 && levenshtein($sw, $nw) <= 1) return true;
+            }
+        }
+
         return false;
     });
 
@@ -72,10 +93,11 @@ public function showShareableItems(Request $request, $itemId)
     ]);
 }
 
-// Show ALL shareable items from all partner parlors
-public function showAllShareableItems()
+
+public function showAllShareableItems(Request $request)
 {
     $userId = auth()->id();
+    $search = $request->input('search'); // Get the search input
 
     // Get all accepted partnerships involving this user
     $partnerIds = Partnership::where('status', 'accepted')
@@ -92,7 +114,7 @@ public function showAllShareableItems()
         ->all();
 
     // Get all partner shareable items (assets and consumables) **filter status in query**
-    $shareableItems = InventoryItem::whereIn('funeral_home_id', $partnerIds)
+    $shareableItemsQuery = InventoryItem::whereIn('funeral_home_id', $partnerIds)
         ->where('shareable', 1)
         ->with(['funeralUser', 'category'])
         ->where(function ($q) {
@@ -104,16 +126,24 @@ public function showAllShareableItems()
                     $cat2->where('is_asset', false);
                 })
                 ->where('shareable_quantity', '>', 0)
-                ->where('status', 'available'); // <--- for consumables
+                ->where('status', 'available');
             });
-        })
-        ->get();
+        });
 
-    // No "item" context, so pass null for item
+    // Add search filter if needed
+    if ($search) {
+        $shareableItemsQuery->where(function($query) use ($search) {
+            $query->where('name', 'like', "%$search%")
+                  ->orWhere('brand', 'like', "%$search%");
+        });
+    }
+
+    $shareableItems = $shareableItemsQuery->get();
+
     return view('funeral.partnerships.resource_requests.request', [
         'item' => null,
         'shareableItems' => $shareableItems,
-        'search' => null,
+        'search' => $search,
     ]);
 }
 

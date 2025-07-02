@@ -1,4 +1,18 @@
 <x-client-layout>
+
+<style>
+    /* This ensures all action columns have a minimum width for button stacking */
+    td[style*="min-width: 220px;"] {
+        vertical-align: middle;
+    }
+    .table .btn {
+        min-width: 180px;
+    }
+    .table .btn + .btn, .table form + form, .table .btn + form {
+        margin-top: 0.25rem;
+    }
+</style>
+
     <div class="container py-5">
         <h2 class="fw-bold mb-4" style="color:#1565c0;">Welcome, {{ auth()->user()->name }}!</h2>
 
@@ -99,83 +113,99 @@
                                                     <td>
                                                         {{ $booking->created_at->format('M d, Y') }}
                                                     </td>
-                                                    <td>
-                                                        {{-- Booking Step Actions --}}
-                                                        @if($booking->status === 'confirmed')
-                                                            <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
-                                                            class="btn btn-success btn-sm rounded-pill mb-1">
-                                                                <i class="bi bi-pencil-square"></i>
-                                                                Fill Out Booking Details
-                                                            </a>
-                                                            <div class="small text-warning mt-1">Please complete required info</div>
-                                                        @elseif($booking->status === 'in_progress')
-                                                            <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
-                                                            class="btn btn-outline-secondary btn-sm rounded-pill mb-1">
-                                                                <i class="bi bi-pencil-square"></i>
-                                                                Edit Booking Details
-                                                            </a>
-                                                            <a href="{{ route('client.bookings.continue.info', $booking->id) }}"
-                                                            class="btn btn-warning btn-sm rounded-pill mb-1">
-                                                                <i class="bi bi-pencil"></i>
-                                                                Continue Filling Out Personal Details
-                                                            </a>
-                                                            <div class="small text-warning mt-1">You may update your details anytime before parlor review.</div>
-                                                        @elseif($booking->status === 'for_initial_review')
-                                                            <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
-                                                            class="btn btn-outline-secondary btn-sm rounded-pill mb-1">
-                                                                <i class="bi bi-pencil-square"></i>
-                                                                Edit Booking Details
-                                                            </a>
-                                                            <a href="{{ route('client.bookings.show', $booking->id) }}"
-                                                            class="btn btn-info btn-sm rounded-pill mb-1">
-                                                                <i class="bi bi-hourglass-top"></i>
-                                                                Waiting for Funeral Parlor Review
-                                                            </a>
-                                                            <div class="small text-muted mt-1">You can edit booking details while waiting for review.</div>
-                                                        @elseif($booking->status === 'for_review')
-                                                            <a href="{{ route('client.bookings.show', $booking->id) }}"
-                                                            class="btn btn-info btn-sm rounded-pill mb-1">
-                                                                <i class="bi bi-journal-check"></i>
-                                                                Waiting for Funeral Parlor Review
-                                                            </a>
-                                                            <div class="small text-muted mt-1">You can only view your booking while waiting.</div>
-                                                        @elseif($booking->status === 'approved')
-                                                            <span class="badge bg-success px-3 py-2">
-                                                                <i class="bi bi-shield-check"></i> Ready to Start
-                                                            </span>
-                                                        @elseif($booking->status === 'ongoing')
-                                                            <a href="{{ route('client.bookings.show', $booking->id) }}"
-                                                            class="btn btn-primary btn-sm rounded-pill mb-1">
-                                                                <i class="bi bi-arrow-repeat"></i>
-                                                                Service In Progress
-                                                            </a>
-                                                        @elseif($booking->status === 'completed')
-                                                            <a href="{{ route('client.bookings.show', $booking->id) }}"
-                                                            class="btn btn-dark btn-sm rounded-pill mb-1">
-                                                                <i class="bi bi-check-circle"></i>
-                                                                View Completed Booking
-                                                            </a>
-                                                        @else
-                                                            <a href="{{ route('client.bookings.show', $booking->id) }}"
-                                                            class="btn btn-outline-primary btn-sm rounded-pill mb-1">
-                                                                <i class="bi bi-eye"></i> View
-                                                            </a>
-                                                        @endif
+<td>
+    <div class="d-flex flex-column align-items-start gap-2">
+        @if($booking->status === 'confirmed')
+            <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
+                class="btn btn-success btn-sm rounded-pill"
+                title="Fill out booking info">
+                <i class="bi bi-pencil-square"></i> Fill
+            </a>
+        @elseif($booking->status === 'in_progress')
+            <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
+                class="btn btn-outline-secondary btn-sm rounded-pill"
+                title="Edit your booking details">
+                <i class="bi bi-pencil-square"></i> Edit
+            </a>
+            <a href="{{ route('client.bookings.continue.info', $booking->id) }}"
+                class="btn btn-warning btn-sm rounded-pill"
+                title="Continue filling personal details">
+                <i class="bi bi-pencil"></i> Continue
+            </a>
+        @elseif($booking->status === 'for_initial_review')
+            <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
+                class="btn btn-outline-secondary btn-sm rounded-pill"
+                title="Edit booking details">
+                <i class="bi bi-pencil-square"></i> Edit
+            </a>
+            <a href="{{ route('client.bookings.show', $booking->id) }}"
+                class="btn btn-info btn-sm rounded-pill"
+                title="Awaiting parlor review">
+                <i class="bi bi-hourglass-top"></i> Awaiting
+            </a>
+        @elseif($booking->status === 'for_review')
+            <a href="{{ route('client.bookings.show', $booking->id) }}"
+                class="btn btn-info btn-sm rounded-pill"
+                title="Waiting for parlor review">
+                <i class="bi bi-journal-check"></i> Awaiting
+            </a>
+        @elseif($booking->status === 'approved')
+            <span class="btn btn-success btn-sm rounded-pill disabled"
+                title="Booking approved">
+                <i class="bi bi-shield-check"></i> Ready
+            </span>
+        @elseif($booking->status === 'ongoing')
+            <a href="{{ route('client.bookings.show', $booking->id) }}"
+                class="btn btn-primary btn-sm rounded-pill"
+                title="Service ongoing">
+                <i class="bi bi-arrow-repeat"></i> Ongoing
+            </a>
+        @elseif($booking->status === 'completed')
+            <a href="{{ route('client.bookings.show', $booking->id) }}"
+                class="btn btn-dark btn-sm rounded-pill"
+                title="See completed booking">
+                <i class="bi bi-check-circle"></i> View
+            </a>
+        @else
+            <a href="{{ route('client.bookings.show', $booking->id) }}"
+                class="btn btn-outline-primary btn-sm rounded-pill"
+                title="View booking">
+                <i class="bi bi-eye"></i> View
+            </a>
+        @endif
 
-                                                        {{-- Cancel Booking Action --}}
-                                                        @if(in_array($booking->status, ['pending', 'confirmed', 'assigned', 'in_progress']))
-                                                            <form method="POST"
-                                                                action="{{ route('client.bookings.cancel', $booking->id) }}"
-                                                                onsubmit="return confirm('Are you sure you want to cancel this booking?');"
-                                                                class="mt-2">
-                                                                @csrf
-                                                                @method('PUT')
-                                                                <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill">
-                                                                    <i class="bi bi-x-circle"></i> Cancel
-                                                                </button>
-                                                            </form>
-                                                        @endif
-                                                    </td>
+        @if(in_array($booking->status, ['pending', 'confirmed', 'assigned', 'in_progress']))
+            <form method="POST"
+                action="{{ route('client.bookings.cancel', $booking->id) }}"
+                onsubmit="return confirm('Are you sure you want to cancel this booking?');"
+                style="margin-bottom: 0;">
+                @csrf
+                @method('PUT')
+                <button type="submit"
+                    class="btn btn-outline-danger btn-sm rounded-pill"
+                    title="Cancel booking">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+            </form>
+        @endif
+    </div>
+
+    {{-- Status Helper/Warning --}}
+    <div class="small mt-2" style="min-height: 18px;">
+        @if($booking->status === 'confirmed' || $booking->status === 'in_progress')
+            <span class="text-warning">Info required</span>
+        @elseif($booking->status === 'for_initial_review')
+            <span class="text-muted">Editable under review</span>
+        @elseif($booking->status === 'for_review')
+            <span class="text-muted">View only</span>
+        @elseif($booking->status === 'in_progress')
+            <span class="text-warning">Update before review</span>
+        @endif
+    </div>
+</td>
+
+
+
                                                 </tr>
                                             @endforeach
                                             </tbody>

@@ -104,9 +104,10 @@ class BookingPackageCustomizationController extends Controller
     }
 
     // Send customization request for approval
+// Send customization request for approval
 public function sendRequest(Request $request, $bookingId)
 {
-    $booking = Booking::with(['funeralHome', 'package'])->findOrFail($bookingId);
+    $booking = Booking::with(['funeralHome', 'package', 'bookingAgent.agentUser', 'client'])->findOrFail($bookingId);
     if ($booking->client_user_id !== auth()->id()) abort(403);
 
     $customized = CustomizedPackage::firstOrCreate(
@@ -115,7 +116,7 @@ public function sendRequest(Request $request, $bookingId)
     );
 
     $input = $request->input('custom_items', []);
-    DB::beginTransaction();
+    \DB::beginTransaction();
 
     try {
         // Wipe old customization
@@ -129,13 +130,13 @@ public function sendRequest(Request $request, $bookingId)
             $substituteId = $data['substitute_for'] ?? $item->id;
             $quantity = max(1, intval($data['quantity'] ?? $item->pivot->quantity));
 
-            $inventoryItem = InventoryItem::findOrFail($substituteId);
+            $inventoryItem = \App\Models\InventoryItem::findOrFail($substituteId);
 
             if ($quantity > $inventoryItem->quantity) {
                 throw new \Exception("Quantity ({$quantity}) exceeds stock ({$inventoryItem->quantity}) for {$inventoryItem->name}.");
             }
 
-            CustomizedPackageItem::create([
+            \App\Models\CustomizedPackageItem::create([
                 'customized_package_id' => $customized->id,
                 'inventory_item_id'     => $substituteId,
                 'substitute_for'        => $substituteId == $item->id ? null : $item->id,
@@ -150,15 +151,34 @@ public function sendRequest(Request $request, $bookingId)
         $customized->status = 'pending';
         $customized->save();
 
-        // Notify parlor
-        $booking->funeralHome->notify(new CustomizationRequestSubmitted($customized));
+        // Notify funeral parlor
+        $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+        $clientName = $booking->client->name ?? 'the client';
+        $packageName = $booking->package->name ?? 'the package';
 
-        DB::commit();
+        $parlorMsg = "A customization request for booking <b>#{$booking->id}</b> has been submitted by <b>{$clientName}</b>. Please review and take action.";
+        $booking->funeralHome->notify(
+            new \App\Notifications\CustomizationRequestSubmitted($customized, $parlorMsg, 'funeral')
+        );
+
+        // Notify agent (if any)
+        if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+            $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+            $agentMsg = "A customization request for booking <b>#{$booking->id}</b> assigned to your client (<b>{$clientName}</b>) at <b>{$parlorName}</b> has been submitted and is pending parlor review.";
+            if ($agentUser) {
+                $agentUser->notify(
+                    new \App\Notifications\CustomizationRequestSubmitted($customized, $agentMsg, 'agent')
+                );
+            }
+        }
+
+        \DB::commit();
         return back()->with('success', 'Customization request sent. Awaiting parlor approval.');
     } catch (\Exception $e) {
-        DB::rollBack();
+        \DB::rollBack();
         return back()->withErrors(['customization_error' => $e->getMessage()]);
     }
 }
+
 
 }

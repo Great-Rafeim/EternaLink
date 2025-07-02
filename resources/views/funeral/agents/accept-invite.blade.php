@@ -3,15 +3,7 @@
     <div class="mb-4 text-center text-muted">
         Complete your agent registration to join the funeral parlor team.
     </div>
-    @if ($errors->any())
-        <div class="alert alert-danger py-2">
-            <ul class="mb-0" style="list-style:none; padding-left:0;">
-                @foreach ($errors->all() as $error)
-                    <li><i class="bi bi-exclamation-circle"></i> {{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
+
     <form method="POST" action="{{ request()->fullUrl() }}">
         @csrf
         <div class="mb-3">
