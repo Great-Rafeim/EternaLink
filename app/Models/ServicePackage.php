@@ -14,8 +14,12 @@ class ServicePackage extends Model
         'description',
         'total_price',
         'image',
-    ];
+        'is_cremation',
 
+    ];
+    protected $casts = [
+        'is_cremation' => 'boolean',
+    ];
     public function funeralHome()
     {
         return $this->belongsTo(User::class, 'funeral_home_id');

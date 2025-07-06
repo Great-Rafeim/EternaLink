@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Booking;
 use Barryvdh\DomPDF\Facade\Pdf; 
+use Carbon\Carbon;
 
 class BookingDetailPreviewController extends Controller
 {
@@ -62,82 +63,128 @@ public function exportPdf(Booking $booking)
             $q->where('status', 'approved')
               ->with(['cemetery.user', 'plot']);
         },
-        // NEW: Eager load logs and user
+        // Eager-load for customized package flows:
+        'customizedPackage.items.inventoryItem.category',
+        'customizedPackage.items.substituteFor',
         'serviceLogs.user',
     ]);
 
-    $packageItems = $booking->package->items->map(function($item) {
-        return [
-            'item'       => $item->name,
-            'category'   => $item->category->name ?? '-',
-            'brand'      => $item->brand ?? '-',
-            'quantity'   => $item->pivot->quantity ?? 1,
-            'category_id'=> $item->category->id ?? null,
-            'is_asset'   => ($item->category->is_asset ?? false) ? true : false,
-        ];
-    })->toArray();
-
-    $assetCategories = \DB::table('package_asset_categories')
-        ->join('inventory_categories', 'package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
-        ->where('package_asset_categories.service_package_id', $booking->package->id)
-        ->where('inventory_categories.is_asset', 1)
-        ->select('inventory_categories.id', 'inventory_categories.name')
-        ->get();
-
-    $assignedAgentIds = \DB::table('booking_agents')
-        ->whereNotNull('agent_user_id')
-        ->pluck('agent_user_id')
-        ->toArray();
-
-    $parlorAgents = \DB::table('users')
-        ->join('funeral_home_agent', function ($join) use ($booking) {
-            $join->on('users.id', '=', 'funeral_home_agent.agent_user_id')
-                ->where('funeral_home_agent.funeral_user_id', $booking->funeral_home_id)
-                ->where('funeral_home_agent.status', 'active');
+    // Fetch asset categories WITH price, for consistency
+    $assetCategories = \DB::table('inventory_categories')
+        ->join('package_asset_categories', function ($join) use ($booking) {
+            $join->on('package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
+                ->where('package_asset_categories.service_package_id', $booking->package->id);
         })
-        ->where('users.role', 'agent')
-        ->whereNull('users.deleted_at')
-        ->whereNotIn('users.id', $assignedAgentIds)
-        ->select('users.id', 'users.name', 'users.email')
+        ->where('inventory_categories.is_asset', 1)
+        ->select(
+            'inventory_categories.id as id',
+            'inventory_categories.name as name',
+            'inventory_categories.is_asset',
+            'package_asset_categories.price as price'
+        )
         ->get();
 
-    $invitationStatus = null;
-    $bookingAgent = $booking->bookingAgent;
-    if ($bookingAgent && $bookingAgent->client_agent_email) {
-        $invitation = \DB::table('agent_client_requests')
-            ->where('client_id', $booking->client_user_id)
-            ->where('booking_id', $booking->id)
-            ->orderByDesc('requested_at')
-            ->first();
-        $invitationStatus = $invitation ? $invitation->status : null;
-    }
+    $assetCategoryPrices = $assetCategories->pluck('price', 'id')->toArray();
 
-    $cemeteryBooking = $booking->cemeteryBooking;
-
-    $useCustomized = $booking->customized_package_id && $booking->customizedPackage;
-    $customized = $useCustomized ? $booking->customizedPackage : null;
-    $phase2 = $booking->detail;
-
-    // NEW: Get service logs (with user info, sorted oldest first)
+    // Service logs sorted oldest first
     $serviceLogs = $booking->serviceLogs()->with('user')->orderBy('created_at')->get();
 
+    // Find assigned plot via booking_details
+    $bookingDetail = \App\Models\BookingDetail::where('booking_id', $booking->id)->first();
+    $plot = null;
+    $plotCemetery = null;
+    $cemeteryOwner = null;
+
+    if ($bookingDetail && $bookingDetail->plot_id) {
+        $plot = \App\Models\Plot::with('cemetery.user')->find($bookingDetail->plot_id);
+        if ($plot) {
+            $plotCemetery = $plot->cemetery;
+            $cemeteryOwner = $plotCemetery?->user;
+        }
+    }
+
+    // Customization/package logic for PDF
+    $useCustomized = $booking->customized_package_id && $booking->customizedPackage;
+    $customized = $useCustomized ? $booking->customizedPackage : null;
+
+    // This lets you access the same logic as in the show view
+    $phase2 = $booking->detail;
+
+    // Optional: pass details (decoded JSON if you use it in the view)
+    $details = $booking->decoded_details ?? null;
+
     $pdf = Pdf::loadView('client.bookings.pdf', [
-        'booking'          => $booking,
-        'packageItems'     => $packageItems,
-        'assetCategories'  => $assetCategories,
-        'parlorAgents'     => $parlorAgents,
-        'invitationStatus' => $invitationStatus,
-        'bookingAgent'     => $bookingAgent,
-        'cemeteryBooking'  => $cemeteryBooking,
-        'customized'       => $customized,
-        'phase2'           => $phase2,
-        // NEW:
-        'serviceLogs'      => $serviceLogs,
+        'booking'             => $booking,
+        'assetCategories'     => $assetCategories,
+        'assetCategoryPrices' => $assetCategoryPrices,
+        'customized'          => $customized,
+        'phase2'              => $phase2,
+        'serviceLogs'         => $serviceLogs,
+        'plot'                => $plot,
+        'plotCemetery'        => $plotCemetery,
+        'cemeteryOwner'       => $cemeteryOwner,
+        'details'             => $details,
     ]);
 
     $filename = 'EternaLink_Booking_' . $booking->id . '.pdf';
     return $pdf->download($filename);
 }
+
+public function downloadCertificate(\App\Models\Booking $booking)
+{
+    $this->authorizeBooking($booking); // Use centralized access logic
+
+    // Check if certificate is released
+    if (!$booking->certificate_released_at || !$booking->certificate_signature) {
+        return back()->with('error', 'Certificate not available yet.');
+    }
+
+    $booking->loadMissing('funeralHome.funeralParlor');
+
+    $parlor = $booking->funeralHome->funeralParlor ?? null;
+
+    // Build certificate details
+    $details = is_array($booking->details) ? $booking->details : json_decode($booking->details, true) ?? [];
+    $deceasedName = $details['deceased_name'] ?? '—';
+    $dateOfDeath  = !empty($details['date_of_death']) ? \Carbon\Carbon::parse($details['date_of_death'])->format('F d, Y') : '—';
+    $cremationDate = !empty($details['cremation_date'])
+        ? \Carbon\Carbon::parse($details['cremation_date'])->format('F d, Y')
+        : (!empty($details['preferred_schedule']) 
+            ? \Carbon\Carbon::parse($details['preferred_schedule'])->format('F d, Y') 
+            : ($booking->created_at ? $booking->created_at->format('F d, Y') : '—'));
+    $issuedDate = $booking->certificate_released_at ? \Carbon\Carbon::parse($booking->certificate_released_at)->format('F d, Y') : now()->format('F d, Y');
+    $funeralParlorName = $parlor?->name ?? $booking->funeralHome?->name ?? '—';
+    $ownerName = $parlor?->owner_name ?? $parlor?->contact_person ?? 'Funeral Owner';
+
+    // Signature image: build absolute path or base64
+    $signatureImage = null;
+    if ($booking->certificate_signature) {
+        if (str_starts_with($booking->certificate_signature, 'data:image')) {
+            $signatureImage = $booking->certificate_signature;
+        } else {
+            $signaturePath = storage_path('app/public/' . $booking->certificate_signature);
+            if (file_exists($signaturePath)) {
+                $signatureImage = 'data:image/png;base64,' . base64_encode(file_get_contents($signaturePath));
+            }
+        }
+    }
+
+    $pdf = \PDF::loadView('client.certificates.cremation_certificate', [
+        'deceasedName'      => $deceasedName,
+        'dateOfDeath'       => $dateOfDeath,
+        'cremationDate'     => $cremationDate,
+        'issuedDate'        => $issuedDate,
+        'funeralParlorName' => $funeralParlorName,
+        'ownerName'         => $ownerName,
+        'signatureImage'    => $signatureImage,
+        'booking'           => $booking, // Optional: pass if needed
+    ])->setPaper('A4', 'landscape'); // LANDSCAPE!
+
+    $filename = 'Cremation-Certificate-' . str_replace(' ', '-', $deceasedName) . '-' . $booking->id . '.pdf';
+
+    return $pdf->download($filename);
+}
+
 
 
 protected function authorizeBooking(\App\Models\Booking $booking)

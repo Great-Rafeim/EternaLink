@@ -47,15 +47,26 @@
                             <input type="text" name="contact_number" class="form-control" required>
                         </div>
                         
-                        {{-- Schedule --}}
-                        <div class="mb-3">
-                            <label class="form-label">
-                                Preferred Date to Start Funeral Services <span class="text-danger">*</span>
-                                <br>
-                                <small class="text-muted">(e.g., when you want the wake or initial arrangements to begin)</small>
-                            </label>
-                            <input type="date" name="preferred_schedule" class="form-control" required>
-                        </div>
+@php
+    $today = \Carbon\Carbon::now()->toDateString();
+@endphp
+
+<div class="mb-3">
+    <label class="form-label">
+        Preferred Date to Start Funeral Services <span class="text-danger">*</span>
+        <br>
+        <small class="text-muted">(e.g., when you want the wake or initial arrangements to begin)</small>
+    </label>
+    <input
+        type="date"
+        name="preferred_schedule"
+        class="form-control"
+        required
+        min="{{ $today }}"
+        value="{{ old('preferred_schedule', $booking->detail->preferred_schedule ?? '') }}"
+    >
+</div>
+
 
                         {{-- Additional Notes --}}
                         <div class="mb-3">

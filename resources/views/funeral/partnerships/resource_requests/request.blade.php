@@ -76,12 +76,14 @@
                             @endif
 
                             @if(isset($item) && $item)
+                                <!-- Classic replenish: pass both IDs -->
                                 <a href="{{ route('funeral.partnerships.resource_requests.createRequestForm', [$item->id, $share->id]) }}"
                                    class="btn btn-outline-primary w-100 fw-semibold rounded-pill">
                                     <i class="bi bi-send me-1"></i> Send Request
                                 </a>
                             @else
-                                <a href="{{ route('funeral.partnerships.resource_requests.createRequestForm', [$share->id, $share->id]) }}"
+                                <!-- NEW: Flexible prompt, pass only provider ID -->
+                                <a href="{{ route('funeral.partnerships.resource_requests.createRequestForm', $share->id) }}"
                                    class="btn btn-outline-primary w-100 fw-semibold rounded-pill">
                                     <i class="bi bi-send me-1"></i> Send Request
                                 </a>

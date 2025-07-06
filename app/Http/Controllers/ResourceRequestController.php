@@ -360,12 +360,20 @@ public function approve($id, Request $request)
 
 public function fulfill(Request $request, $id)
 {
+    \Log::debug('[fulfill] Called', ['id' => $id, 'input' => $request->all()]);
     $resourceRequest = ResourceRequest::findOrFail($id);
 
+    \Log::debug('[fulfill] ResourceRequest loaded', ['resourceRequest' => $resourceRequest->toArray()]);
+
     if ($resourceRequest->requester_id !== auth()->id()) {
+        \Log::warning('[fulfill] Unauthorized access attempt', [
+            'expected' => $resourceRequest->requester_id,
+            'actual'   => auth()->id()
+        ]);
         abort(403, 'Unauthorized');
     }
     if ($resourceRequest->status !== 'approved') {
+        \Log::warning('[fulfill] Not approved', ['status' => $resourceRequest->status]);
         return back()->with('error', 'Only approved requests can be fulfilled.');
     }
 
@@ -373,14 +381,19 @@ public function fulfill(Request $request, $id)
     $requestedItem = $resourceRequest->requestedItem;
     $isAsset = $providerItem->category && $providerItem->category->is_asset;
 
+    \Log::debug('[fulfill] providerItem', [
+        'providerItem' => $providerItem ? $providerItem->toArray() : null,
+        'requestedItem' => $requestedItem ? $requestedItem->toArray() : null,
+        'isAsset' => $isAsset
+    ]);
+
     \DB::beginTransaction();
     try {
         if ($isAsset) {
-            // 1. Validate category input
+            // No requested_item_id is used for assets
             $request->validate([
                 'inventory_category_id' => [
                     'required',
-                    // Only categories belonging to this borrower's funeral_home
                     function ($attribute, $value, $fail) use ($resourceRequest) {
                         $exists = \App\Models\InventoryCategory::where('id', $value)
                             ->where('funeral_home_id', $resourceRequest->requester_id)
@@ -391,11 +404,12 @@ public function fulfill(Request $request, $id)
                     }
                 ]
             ]);
+            \Log::debug('[fulfill][ASSET] Category validated', ['inventory_category_id' => $request->input('inventory_category_id')]);
 
             $reservation = null;
-
             if ($resourceRequest->asset_reservation_id) {
                 $reservation = AssetReservation::find($resourceRequest->asset_reservation_id);
+                \Log::debug('[fulfill][ASSET] Found asset_reservation_id', ['reservation' => $reservation ? $reservation->toArray() : null]);
             } else {
                 $reservation = AssetReservation::where('inventory_item_id', $providerItem->id)
                     ->where('shared_with_partner_id', $resourceRequest->requester_id)
@@ -403,9 +417,9 @@ public function fulfill(Request $request, $id)
                     ->where('status', 'reserved')
                     ->latest('reserved_start')
                     ->first();
+                \Log::debug('[fulfill][ASSET] Found reservation by query', ['reservation' => $reservation ? $reservation->toArray() : null]);
             }
 
-            // If no reservation, create it
             if (!$reservation) {
                 $reservation = AssetReservation::create([
                     'inventory_item_id'       => $providerItem->id,
@@ -418,6 +432,7 @@ public function fulfill(Request $request, $id)
                 ]);
                 $resourceRequest->asset_reservation_id = $reservation->id;
                 $resourceRequest->save();
+                \Log::debug('[fulfill][ASSET] Reservation created', ['reservation' => $reservation->toArray()]);
             } else {
                 $updateNeeded = false;
                 if (!$reservation->shared_with_partner_id) {
@@ -433,16 +448,17 @@ public function fulfill(Request $request, $id)
                     $updateNeeded = true;
                 }
                 if ($updateNeeded) $reservation->save();
+                \Log::debug('[fulfill][ASSET] Reservation updated', ['reservation' => $reservation->toArray()]);
             }
 
-            // 2. Mark provider's asset as shared_to_partner
             $providerItem->status = 'shared_to_partner';
             $providerItem->save();
+            \Log::debug('[fulfill][ASSET] Provider asset status updated', ['status' => $providerItem->status]);
 
-            // 3. Create the borrowed asset in borrower's inventory with selected category
+            // Add asset to requester's inventory (quantity always 1, new row)
             $borrowedAsset = new InventoryItem([
                 'funeral_home_id'         => $resourceRequest->requester_id,
-                'inventory_category_id'   => $request->input('inventory_category_id'), // use selection!
+                'inventory_category_id'   => $request->input('inventory_category_id'),
                 'name'                    => $providerItem->name,
                 'brand'                   => $providerItem->brand,
                 'quantity'                => 1,
@@ -460,44 +476,110 @@ public function fulfill(Request $request, $id)
                 'borrowed_end'            => $reservation->reserved_end,
             ]);
             $borrowedAsset->save();
+            \Log::debug('[fulfill][ASSET] Borrowed asset created', ['borrowedAsset' => $borrowedAsset->toArray()]);
 
             $reservation->status = 'in_use';
             $reservation->borrowed_item_id = $borrowedAsset->id;
             $reservation->save();
+            \Log::debug('[fulfill][ASSET] Reservation marked in_use');
         } else {
-            // For consumables: move stock
+            // ========== CONSUMABLES ONLY ==========
+            \Log::debug('[fulfill][CONSUMABLE] Starting fulfillment branch', [
+                'requested_item_id' => $resourceRequest->requested_item_id,
+                'new_item_name' => $resourceRequest->new_item_name,
+                'new_item_category_id' => $resourceRequest->new_item_category_id
+            ]);
+
+            $newlyCreatedItem = false;
+
+            // CASE: Add as NEW item to requester's inventory
+            if (!$resourceRequest->requested_item_id && $resourceRequest->new_item_name && $resourceRequest->new_item_category_id) {
+                \Log::debug('[fulfill][CONSUMABLE] Creating new InventoryItem for requester', [
+                    'funeral_home_id' => $resourceRequest->requester_id,
+                    'inventory_category_id' => $resourceRequest->new_item_category_id,
+                    'name' => $resourceRequest->new_item_name,
+                    'brand' => $resourceRequest->new_item_brand,
+                    'quantity' => $resourceRequest->quantity
+                ]);
+                $newRequestedItem = InventoryItem::create([
+                    'funeral_home_id'         => $resourceRequest->requester_id,
+                    'inventory_category_id'   => $resourceRequest->new_item_category_id,
+                    'name'                    => $resourceRequest->new_item_name,
+                    'brand'                   => $resourceRequest->new_item_brand,
+                    'quantity'                => $resourceRequest->quantity,
+                    'status'                  => 'available',
+                    'shareable'               => 0,
+                    'shareable_quantity'      => 0,
+                ]);
+                // Link the created item to the request (so history is clear)
+                $resourceRequest->requested_item_id = $newRequestedItem->id;
+                $requestedItem = $newRequestedItem;
+                $resourceRequest->save();
+                $newlyCreatedItem = true;
+                \Log::debug('[fulfill][CONSUMABLE] New InventoryItem created and linked', [
+                    'new_item_id' => $newRequestedItem->id
+                ]);
+            }
+
+            // For both new or existing: deduct from provider, add to requested
             if ($providerItem && $requestedItem) {
+                $providerBefore = $providerItem->quantity;
+                $requesterBefore = $requestedItem->quantity;
+
                 $providerItem->shareable_quantity = max(0, $providerItem->shareable_quantity - $resourceRequest->quantity);
                 $providerItem->quantity = max(0, $providerItem->quantity - $resourceRequest->quantity);
                 $providerItem->save();
 
-                $requestedItem->quantity += $resourceRequest->quantity;
-                $requestedItem->save();
+                // Only add to requester if this is NOT a just-created item (already set correct)
+                if (!$newlyCreatedItem) {
+                    $requestedItem->quantity += $resourceRequest->quantity;
+                    $requestedItem->save();
+                }
+
+                \Log::debug('[fulfill][CONSUMABLE] Stock moved', [
+                    'provider_before' => $providerBefore,
+                    'provider_after' => $providerItem->quantity,
+                    'requester_before' => $requesterBefore,
+                    'requester_after' => $requestedItem->quantity,
+                ]);
             }
         }
 
         // 4. Mark request as fulfilled
         $resourceRequest->status = 'fulfilled';
         $resourceRequest->save();
+        \Log::debug('[fulfill] Request marked fulfilled', ['resource_request_id' => $resourceRequest->id]);
 
         $providerUser = \App\Models\User::find($resourceRequest->provider_id);
         $requesterUser = \App\Models\User::find($resourceRequest->requester_id);
 
         if ($providerUser && $providerUser->id != $requesterUser->id) {
             $providerUser->notify(new ResourceRequestFulfilledNotification($resourceRequest, true));
+            \Log::debug('[fulfill] Provider notified', ['providerUserId' => $providerUser->id]);
         }
         if ($requesterUser) {
             $requesterUser->notify(new ResourceRequestFulfilledNotification($resourceRequest, false));
+            \Log::debug('[fulfill] Requester notified', ['requesterUserId' => $requesterUser->id]);
         }
 
         \DB::commit();
+        \Log::debug('[fulfill] Commit success');
         return redirect()->route('funeral.partnerships.resource_requests.index')
             ->with('success', 'Request marked as fulfilled and inventory updated!');
     } catch (\Exception $e) {
         \DB::rollBack();
+        \Log::error('[fulfill] Exception occurred', [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
         return back()->with('error', 'An error occurred: ' . $e->getMessage());
     }
 }
+
+
+
+
+
 
 
 }

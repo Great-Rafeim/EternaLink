@@ -211,7 +211,7 @@
                 <li class="nav-item mb-2">
                     <a class="nav-link {{ request()->routeIs('funeral.partnerships.resource_requests.index') ? 'active' : '' }}"
                         href="{{ route('funeral.partnerships.resource_requests.index') }}">
-                        <i class="bi bi-envelope-paper me-2"></i> Vesource Requests
+                        <i class="bi bi-envelope-paper me-2"></i> Resource Requests
                     </a>
                 </li>
 
@@ -224,6 +224,12 @@
                 </li>
                 @endif
                 <div class="sidebar-heading">Other</div>
+                <li class="nav-item mb-2">
+                    <a class="nav-link {{ request()->routeIs('funeral.profits.index') ? 'active' : '' }}"
+                        href="{{ route('funeral.profits.index') }}">
+                        <i class="bi bi-currency-dollar me-2"></i> Profits
+                    </a>
+                </li>
                 <li class="nav-item mb-2">
                     <a class="nav-link {{ request()->routeIs('funeral.profile.*') ? 'active' : '' }}"
                         href="{{ route('funeral.profile.edit') }}">

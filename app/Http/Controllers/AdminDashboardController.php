@@ -19,6 +19,9 @@ public function index()
         ->latest()
         ->get();
 
+    // Total profit from paid convenience fees
+    $totalProfit = \App\Models\Payment::where('status', 'paid')->sum('convenience_fee');
+
     return view('admin.dashboard', [
         'totalUsers'      => \App\Models\User::count(),
         'clientCount'     => \App\Models\User::where('role', 'client')->count(),
@@ -27,6 +30,7 @@ public function index()
         'cemeteryCount'   => \App\Models\User::where('role', 'cemetery')->count(),
         'logins'          => $logins,
         'pendingRequests' => $pendingRequests,
+        'totalProfit'     => $totalProfit, // pass this
     ]);
 }
 

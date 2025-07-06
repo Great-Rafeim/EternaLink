@@ -48,18 +48,38 @@ class ClientController extends Controller
 
 
     // Show a single funeral parlor with its service packages
-    public function showServicePackages($id)
-    {
-        $parlor = User::with('funeralParlor')
-            ->where('role', 'funeral')
-            ->findOrFail($id);
+public function showServicePackages($id)
+{
+    $parlor = User::with('funeralParlor')
+        ->where('role', 'funeral')
+        ->findOrFail($id);
 
-        $servicePackages = \App\Models\ServicePackage::where('funeral_home_id', $parlor->id)
-            ->orderBy('name')
-            ->get();
+    // Get all packages for the parlor, newest first
+    $servicePackages = \App\Models\ServicePackage::where('funeral_home_id', $parlor->id)
+        ->orderByDesc('created_at')
+        ->get();
 
-        return view('client.parlors.service_packages', compact('parlor', 'servicePackages'));
-    }
+    // Optionally: prepare the collection for JS (for efficiency)
+    $packagesForJs = $servicePackages->map(function ($p) {
+        return [
+            'id' => $p->id,
+            'name' => $p->name,
+            'description' => $p->description,
+            'image' => $p->image ? asset('storage/' . $p->image) : null,
+            'is_cremation' => $p->is_cremation ? 1 : 0,
+            'created_at' => $p->created_at->format('Y-m-d H:i:s'),
+            'created_at_display' => $p->created_at->format('M d, Y'),
+            'total_price' => $p->total_price,
+        ];
+    });
+
+    return view('client.parlors.service_packages', [
+        'parlor' => $parlor,
+        'servicePackages' => $servicePackages,
+        'packagesForJs' => $packagesForJs, // Use this in your Blade for JS
+    ]);
+}
+
 
     public function updateProfile(Request $request)
     {

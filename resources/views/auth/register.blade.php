@@ -29,25 +29,30 @@
                     <x-input-error :messages="$errors->get('email')" class="mt-2" />
                 </div>
 
-                <!-- Role Selection -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-300 mb-2">Register As *</label>
-                    <div class="flex flex-col gap-2">
-                        @foreach (['client' => 'Client', 'funeral' => 'Funeral Parlor', 'cemetery' => 'Cemetery'] as $value => $label)
-                            <label class="inline-flex items-center text-gray-200">
-                                <input type="radio" name="role" value="{{ $value }}"
-                                       {{ old('role') === $value ? 'checked' : '' }}
-                                       class="form-radio text-blue-500 focus:ring focus:ring-blue-300"
-                                       required
-                                       @if($value !== 'client') data-needs-proof="1" @endif>
-                                <span class="ml-2">{{ $label }}</span>
-                            </label>
-                        @endforeach
-                    </div>
-                    @error('role')
-                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
-                    @enderror
-                </div>
+<!-- Role Selection -->
+<div>
+    <label class="block text-sm font-semibold text-gray-300 mb-2">Register As *</label>
+    <div class="flex flex-col gap-2">
+        @foreach ([
+            'client'   => 'Client',
+            'funeral'  => 'Funeral Parlor/Crematorium',
+            'cemetery' => 'Cemetery/Columbarium'
+        ] as $value => $label)
+            <label class="inline-flex items-center text-gray-200">
+                <input type="radio" name="role" value="{{ $value }}"
+                       {{ old('role') === $value ? 'checked' : '' }}
+                       class="form-radio text-blue-500 focus:ring focus:ring-blue-300"
+                       required
+                       @if($value !== 'client') data-needs-proof="1" @endif>
+                <span class="ml-2">{{ $label }}</span>
+            </label>
+        @endforeach
+    </div>
+    @error('role')
+        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+    @enderror
+</div>
+
 
                 <!-- Conditional Business Documents Upload -->
                 <div id="business-proof-fields" class="{{ old('role') === 'funeral' || old('role') === 'cemetery' ? '' : 'hidden' }} space-y-3">

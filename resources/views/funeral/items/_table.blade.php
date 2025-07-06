@@ -26,6 +26,7 @@
     <table class="table table-dark table-hover table-bordered border-secondary align-middle text-white shadow-sm rounded-3">
 <thead class="table-secondary text-dark">
 <tr>
+    <th style="width: 45px;">No.</th>
     <th>
         <a href="{{ request()->fullUrlWithQuery(['sort' => 'name','direction' => request('sort')==='name'&&request('direction')==='asc'?'desc':'asc']) }}"
            class="text-dark text-decoration-none">
@@ -123,6 +124,7 @@
         <tbody>
             @forelse ($items as $item)
                 <tr class="{{ $item->quantity <= $item->low_stock_threshold ? 'table-danger' : '' }}">
+                    <td>{{ $loop->iteration + $items->firstItem() - 1 }}</td>
                     <td>{{ $item->name }}</td>
                     <td>
                         <span>{{ $item->category->name ?? 'Uncategorized' }}</span>

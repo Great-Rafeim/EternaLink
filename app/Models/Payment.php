@@ -13,12 +13,16 @@ class Payment extends Model
     protected $fillable = [
         'booking_id',
         'amount',
+        'convenience_fee',    // added
         'method',
         'installment_no',
         'due_date',
         'paid_at',
         'status',
         'notes',
+        'reference_id',       // added
+        'raw_response',       // added
+        'reference_number',
     ];
 
     // Relationships

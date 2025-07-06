@@ -262,5 +262,39 @@
             document.querySelector('input[type="file"][name="image"]').value = "";
             document.getElementById('remove-image-input').value = "1";
         }
+
+document.addEventListener('DOMContentLoaded', function () {
+    var shareableSwitch = document.getElementById('shareableSwitch');
+    var shareableQtyInput = document.getElementById('shareable_quantity');
+    var shareableQtyRow = document.getElementById('shareableQtyRow');
+
+    function updateShareableQtyVisibility() {
+        // If asset, always hide
+        var selectedCategoryId = document.getElementById('categorySelect').value;
+        var isAsset = window.categoryAssetMap[selectedCategoryId] == 1;
+        if (isAsset) {
+            shareableQtyRow.style.display = 'none';
+            shareableQtyInput.value = '';
+            return;
+        }
+        if (shareableSwitch.checked) {
+            shareableQtyRow.style.display = '';
+        } else {
+            shareableQtyRow.style.display = 'none';
+            // Clear the input so 0 or any value doesn't get submitted
+            shareableQtyInput.value = '';
+        }
+    }
+
+    // Run on load
+    updateShareableQtyVisibility();
+
+    // Run on toggle
+    shareableSwitch.addEventListener('change', updateShareableQtyVisibility);
+
+    // Also run on category change (so assets always hide this field)
+    document.getElementById('categorySelect').addEventListener('change', updateShareableQtyVisibility);
+});
+
 </script>
 </x-layouts.funeral>

@@ -136,20 +136,23 @@
                             <tbody>
                             @forelse($bookings as $booking)
                                 @php
-                                    $statusMap = [
-                                        'pending'          => ['warning',  'hourglass-split'],
-                                        'confirmed'        => ['info',     'check-circle'],
-                                        'for_payment_details' => ['primary','wallet'],
-                                        'in_progress'      => ['secondary','pencil-square'],
-                                        'for_initial_review' => ['warning','journal-check'],
-                                        'for_final_review' => ['warning','file-earmark-check'],
-                                        'for_review'       => ['secondary','journal-check'],
-                                        'approved'         => ['success',  'hand-thumbs-up'],
-                                        'ongoing'          => ['primary',  'arrow-repeat'],
-                                        'completed'        => ['success',  'award'],
-                                        'declined'         => ['danger',   'x-circle'],
-                                        'cancelled'        => ['danger',   'slash-circle'],
-                                    ];
+$statusMap = [
+    'pending'           => ['warning',  'hourglass-split'],
+    'pending_payment'   => ['primary',  'wallet2'],      // <-- New: payment pending
+    'paid'              => ['success',  'credit-card-2-front'], // <-- New: paid/settled
+    'confirmed'         => ['info',     'check-circle'],
+    'for_payment_details' => ['primary','wallet'],
+    'in_progress'       => ['secondary','pencil-square'],
+    'for_initial_review'=> ['warning',  'journal-check'],
+    'for_final_review'  => ['warning',  'file-earmark-check'],
+    'for_review'        => ['secondary','journal-check'],
+    'approved'          => ['success',  'hand-thumbs-up'],
+    'ongoing'           => ['primary',  'arrow-repeat'],
+    'completed'         => ['success',  'award'],
+    'declined'          => ['danger',   'x-circle'],
+    'cancelled'         => ['danger',   'slash-circle'],
+];
+
                                     $s = $statusMap[$booking->status] ?? ['secondary','question'];
                                     $assignedAgent = $booking->bookingAgent->agentUser ?? null;
                                     $isDeclined    = $booking->status === 'declined';

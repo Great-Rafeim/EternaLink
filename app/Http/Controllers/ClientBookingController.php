@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\ServicePackage;
 use App\Models\Booking; // ✅ CORRECT
-
+use Barryvdh\DomPDF\Facade\Pdf; // Add this at the top
+use Illuminate\Support\Carbon;
 
 class ClientBookingController extends Controller
 {
@@ -18,6 +19,7 @@ class ClientBookingController extends Controller
         return view('client.parlors.packages.book', compact('package'));
     }
     
+    // Store the booking
     public function store(Request $request, $packageId)
     {
         $validated = $request->validate([
@@ -40,26 +42,27 @@ class ClientBookingController extends Controller
             'notes'              => $request->notes,
         ];
 
+        // Fetch the package to get its cremation/burial status
+        $package = ServicePackage::findOrFail($validated['package_id']);
+
+        // Save cremation/burial status to bookings table
         $booking = Booking::create([
             'client_user_id'   => auth()->id(),
             'funeral_home_id'  => $validated['funeral_home_id'],
             'package_id'       => $validated['package_id'],
             'status'           => 'pending',
             'details'          => json_encode($details),
+            'is_cremation'     => $package->is_cremation ? 1 : 0, // 1 = cremation, 0 = burial
+            // If your table uses 'is_category', change this line to:
+            // 'is_category'      => $package->is_cremation ? 1 : 0,
         ]);
 
-        // Notify the funeral home (User model with 'funeral' role)
-        $funeralHome = $booking->funeralHome; // This must be a User model instance
-
+        // Notify the funeral home
+        $funeralHome = $booking->funeralHome;
         if ($funeralHome) {
             $funeralHome->notify(new \App\Notifications\NewBookingReceived($booking));
         }
 
         return redirect()->route('client.parlors.index')->with('success', 'Booking submitted!');
     }
-
-
-
-
-
 }

@@ -50,11 +50,17 @@
                             <i class="bi bi-people-fill me-2"></i><span>User Management</span>
                         </a>
                     </li>
+                                        <li>
+                        <a class="nav-link {{ request()->routeIs('admin.profits.index') ? 'active' : '' }}" href="{{ route('admin.profits') }}">
+                            <i class="bi bi-currency-dollar me-2"></i><span>Profits</span>
+                        </a>
+                    </li>
                     <li>
                         <a class="nav-link {{ request()->routeIs('admin.login-history') ? 'active' : '' }}" href="{{ route('admin.login-history') }}">
                             <i class="bi bi-journal-check me-2"></i><span>Login History</span>
                         </a>
                     </li>
+
                 </ul>
                 <div class="sidebar-heading mt-auto mb-2">OTHERS</div>
                 <ul class="nav flex-column">

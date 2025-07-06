@@ -12,6 +12,8 @@ use App\Notifications\BookingStatusChanged;
 use Illuminate\Support\Facades\DB;
 use App\Models\AssetReservation;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
+
 
 class FuneralDashboardController extends Controller
 {
@@ -23,31 +25,74 @@ public function showBooking($id)
 }
 
 
-    // 1. DASHBOARD
-    public function index()
-    {
-        $user = auth()->user();
-        $userId = $user->id;
+// 1. DASHBOARD
+public function index()
+{
+    $user = auth()->user();
+    $userId = $user->id;
 
-        // Eager load the assigned agent for each booking
-        $bookings = Booking::with([
-            'bookingAgent.agentUser', // Make sure relationships exist!
+    // Bookings by status (for "pending" use multiple statuses)
+    $pendingStatuses = [
+        'pending', 
+        'for_initial_review', 
+        'for_review', 
+        'confirmed', 
+        'approved', 
+        'in_progress'
+    ];
+    $pendingCount   = \App\Models\Booking::where('funeral_home_id', $userId)
+        ->whereIn('status', $pendingStatuses)
+        ->count();
+
+    $ongoingCount   = \App\Models\Booking::where('funeral_home_id', $userId)
+        ->where('status', 'ongoing')
+        ->count();
+
+    $completedCount = \App\Models\Booking::where('funeral_home_id', $userId)
+        ->where('status', 'completed')
+        ->count();
+
+    // Partners (accepted only, both as requester and partner)
+    $partnerCount = \DB::table('partnerships')
+        ->where(function($q) use ($userId) {
+            $q->where('requester_id', $userId)
+              ->orWhere('partner_id', $userId);
+        })
+        ->where('status', 'accepted')
+        ->count();
+
+    // Active agents assigned to this funeral home
+    $agentCount = \DB::table('funeral_home_agent')
+        ->where('funeral_user_id', $userId)
+        ->where('status', 'active')
+        ->count();
+
+    // Eager load the assigned agent for each booking (pagination for bookings list below cards)
+    $bookings = \App\Models\Booking::with([
+            'bookingAgent.agentUser',
         ])
         ->where('funeral_home_id', $userId)
         ->orderByDesc('created_at')
         ->paginate(10);
+    
+    return view('funeral.dashboard', [
+        'bookings' => $bookings,
+        'totalItems' => \App\Models\InventoryItem::where('funeral_home_id', $userId)->count(),
+        'lowStockCount' => \App\Models\InventoryItem::where('funeral_home_id', $userId)
+            ->whereColumn('quantity', '<=', 'low_stock_threshold')
+            ->count(),
+        'categoryCount' => \App\Models\InventoryCategory::where('funeral_home_id', $userId)->count(),
+        'packageCount' => \App\Models\ServicePackage::where('funeral_home_id', $userId)->count(),
+        'recentNotifications' => $user->notifications()->latest()->paginate(5),
+        // Add new summary counts:
+        'partnerCount' => $partnerCount,
+        'agentCount' => $agentCount,
+        'pendingCount' => $pendingCount,
+        'ongoingCount' => $ongoingCount,
+        'completedCount' => $completedCount,
+    ]);
+}
 
-        return view('funeral.dashboard', [
-            'bookings' => $bookings,
-            'totalItems' => InventoryItem::where('funeral_home_id', $userId)->count(),
-            'lowStockCount' => InventoryItem::where('funeral_home_id', $userId)
-                ->whereColumn('quantity', '<=', 'low_stock_threshold')
-                ->count(),
-            'categoryCount' => InventoryCategory::where('funeral_home_id', $userId)->count(),
-            'packageCount' => ServicePackage::where('funeral_home_id', $userId)->count(),
-            'recentNotifications' => $user->notifications()->latest()->paginate(5),
-        ]);
-    }
 
 public function bookings(Request $request)
 {
@@ -146,35 +191,35 @@ public function show(Booking $booking)
             $q->where('status', 'approved')
               ->with(['cemetery.user', 'plot']);
         },
+        // Add for customized package support if you use it in the funeral view:
+        'customizedPackage.items.inventoryItem.category',
+        'customizedPackage.items.substituteFor',
     ]);
 
-    $packageItems = $booking->package->items->map(function($item) {
-        return [
-            'item'       => $item->name,
-            'category'   => $item->category->name ?? '-',
-            'brand'      => $item->brand ?? '-',
-            'quantity'   => $item->pivot->quantity ?? 1,
-            'category_id'=> $item->category->id ?? null,
-            'is_asset'   => ($item->category->is_asset ?? false) ? true : false,
-        ];
-    })->toArray();
-
-    $assetCategories = \DB::table('package_asset_categories')
-        ->join('inventory_categories', 'package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
-        ->where('package_asset_categories.service_package_id', $booking->package->id)
+    // --- Asset Categories WITH PRICE, exactly as in client show ---
+    $assetCategories = \DB::table('inventory_categories')
+        ->join('package_asset_categories', function ($join) use ($booking) {
+            $join->on('package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
+                ->where('package_asset_categories.service_package_id', $booking->package->id);
+        })
         ->where('inventory_categories.is_asset', 1)
-        ->select('inventory_categories.id', 'inventory_categories.name')
+        ->select(
+            'inventory_categories.id as id',
+            'inventory_categories.name as name',
+            'inventory_categories.is_asset',
+            'package_asset_categories.price as price'
+        )
         ->get();
 
-    // Available agents: Must belong to this parlor, be active, and not be assigned to another booking
-// Get agent IDs that are assigned to bookings for THIS parlor only
-$assignedAgentIds = \DB::table('booking_agents')
-    ->join('bookings', 'booking_agents.booking_id', '=', 'bookings.id')
-    ->where('booking_agents.agent_user_id', '!=', null)
-    ->where('bookings.funeral_home_id', $booking->funeral_home_id)
-    ->pluck('booking_agents.agent_user_id')
-    ->toArray();
+    $assetCategoryPrices = $assetCategories->pluck('price', 'id')->toArray();
 
+    // Available agents: Must belong to this parlor, be active, and not be assigned to another booking
+    $assignedAgentIds = \DB::table('booking_agents')
+        ->join('bookings', 'booking_agents.booking_id', '=', 'bookings.id')
+        ->where('booking_agents.agent_user_id', '!=', null)
+        ->where('bookings.funeral_home_id', $booking->funeral_home_id)
+        ->pluck('booking_agents.agent_user_id')
+        ->toArray();
 
     $parlorAgents = \DB::table('users')
         ->join('funeral_home_agent', function ($join) use ($booking) {
@@ -208,8 +253,8 @@ $assignedAgentIds = \DB::table('booking_agents')
     if ($bookingDetail && $bookingDetail->plot_id) {
         $plot = \App\Models\Plot::with('cemetery.user')->find($bookingDetail->plot_id);
         if ($plot) {
-            $plotCemetery = $plot->cemetery;         // The Cemetery model
-            $cemeteryOwner = $plotCemetery?->user;   // The User model (cemetery owner)
+            $plotCemetery = $plot->cemetery;
+            $cemeteryOwner = $plotCemetery?->user;
         }
     }
 
@@ -218,8 +263,8 @@ $assignedAgentIds = \DB::table('booking_agents')
 
     return view('funeral.bookings.show', compact(
         'booking',
-        'packageItems',
         'assetCategories',
+        'assetCategoryPrices',
         'parlorAgents',
         'invitationStatus',
         'bookingAgent',
@@ -241,14 +286,21 @@ public function approve(Request $request, Booking $booking)
     // Determine new status
     if ($booking->status === Booking::STATUS_PENDING) {
         $newStatus = Booking::STATUS_CONFIRMED;
-    } elseif ($booking->status === Booking::STATUS_SUBMITTED || $booking->status === 'for_review') {
+    } elseif (
+        $booking->status === Booking::STATUS_SUBMITTED ||
+        $booking->status === 'for_review' ||
+        $booking->status === Booking::STATUS_PAID ||
+        $booking->status === 'paid'
+    ) {
         $newStatus = Booking::STATUS_APPROVED;
+    } elseif ($booking->status === 'for_initial_review') {
+        $newStatus = 'in_progress';
     } else {
         return back()->with('error', 'Booking cannot be approved at this stage.');
     }
 
     try {
-        DB::transaction(function () use ($booking, $newStatus) {
+        \DB::transaction(function () use ($booking, $newStatus) {
             // Only get real inventory items (consumables) to deduct
             $items = $booking->customized_package_id && $booking->customizedPackage
                 ? $booking->customizedPackage->items
@@ -304,6 +356,8 @@ public function approve(Request $request, Booking $booking)
             $clientMsg = "Your booking for <b>{$packageName}</b> has been <b>PRE-APPROVED</b>. Please proceed with filling out the required information.";
         } elseif ($newStatus === Booking::STATUS_APPROVED) {
             $clientMsg = "Your booking for <b>{$packageName}</b> has been <b>APPROVED</b>. Wait for the service to start.";
+        } elseif ($newStatus === 'in_progress') {
+            $clientMsg = "Your booking for <b>{$packageName}</b> has passed the initial review and is now <b>IN PROGRESS</b>.";
         }
         \Log::info('[NOTIFY] Approve: Notifying client', [
             'client_id'   => $booking->client->id ?? null,
@@ -320,6 +374,8 @@ public function approve(Request $request, Booking $booking)
             $agentMsg = "A booking for <b>{$packageName}</b> assigned to your client (<b>{$clientName}</b>) at <b>{$parlorName}</b> has been <b>PRE-APPROVED</b>. The client can now fill out the required information.";
         } elseif ($newStatus === Booking::STATUS_APPROVED) {
             $agentMsg = "A booking for <b>{$packageName}</b> assigned to your client (<b>{$clientName}</b>) at <b>{$parlorName}</b> has been <b>APPROVED</b> and is now ready to proceed.";
+        } elseif ($newStatus === 'in_progress') {
+            $agentMsg = "A booking for <b>{$packageName}</b> assigned to your client (<b>{$clientName}</b>) at <b>{$parlorName}</b> is now <b>IN PROGRESS</b> after initial review.";
         }
         if ($agentUser) {
             \Log::info('[NOTIFY] Approve: Notifying agent', [
@@ -334,6 +390,8 @@ public function approve(Request $request, Booking $booking)
     return redirect()->route('funeral.bookings.index')
         ->with('success', 'Booking approved, consumable inventory updated.');
 }
+
+
 
 
 
@@ -432,8 +490,11 @@ public function manageService(Booking $booking)
 {
     // Optionally: authorize
     // $this->authorize('manage', $booking);
+        dd($booking);
     return view('funeral.bookings.manage-service', compact('booking'));
 }
+
+
 // FINAL APPROVAL: submitted ➔ approved
 public function finalApprove(Request $request, Booking $booking)
 {
@@ -468,7 +529,7 @@ public function finalApprove(Request $request, Booking $booking)
 }
 
 
-            // START SERVICE: approved ➔ ongoing
+// START SERVICE: approved ➔ ongoing
 public function startService(Booking $booking)
 {
     // Only allow if currently approved
@@ -642,7 +703,12 @@ public function customizationApprove(Request $request, $bookingId, $customizedPa
         ->filter(fn($cat) => !in_array($cat->id, $assignedAssetCatIds))
         ->sum(fn($cat) => $cat->price);
 
-    $customized->custom_total_price = $itemsTotal + $missingAssetTotal;
+    $subTotal = $itemsTotal + $missingAssetTotal;
+    $vat = round($subTotal * 0.12, 2); // Calculate 12% VAT
+    $grandTotal = round($subTotal + $vat, 2);
+
+    // Save total with VAT included
+    $customized->custom_total_price = $grandTotal;
     $customized->status = 'approved';
     $customized->save();
 
@@ -671,8 +737,9 @@ public function customizationApprove(Request $request, $bookingId, $customizedPa
         }
     }
 
-    return back()->with('success', 'Customization approved, price recalculated, and client notified.');
+    return back()->with('success', 'Customization approved, price recalculated with VAT, and client notified.');
 }
+
 
 // Deny customization request
 public function customizationDeny(Request $request, $bookingId, $customizedPackageId)
@@ -1000,11 +1067,8 @@ public function editInfo($bookingId)
 
 
     // Amount logic (always double check relations)
-    if ($booking->customized_package_id && $booking->customizedPackage) {
-        $totalAmount = $booking->customizedPackage->custom_total_price ?? 0;
-    } else {
-        $totalAmount = $booking->package->total_price ?? 0;
-    }
+    $totalAmount = $booking->detail->amount ?? 0;
+
 
     // Optionally get client name for header display
     $clientName = $booking->client->name ?? null;
@@ -1017,6 +1081,401 @@ public function editInfo($bookingId)
         'clientName'  => $clientName,
     ]);
 }
+
+
+public function payWithLink(Request $request, $bookingId)
+{
+    try {
+        \Log::info('[payWithLink] Start for bookingId: ' . $bookingId);
+
+        $booking = Booking::findOrFail($bookingId);
+        \Log::info('[payWithLink] Booking loaded', ['booking_id' => $booking->id]);
+
+        $currentUser = auth()->user();
+        \Log::info('[payWithLink] Current User:', [
+            'user_id' => $currentUser->id,
+            'user_email' => $currentUser->email,
+            'role' => $currentUser->role
+        ]);
+
+        // Allow only client or funeral parlor user
+        if (!in_array($currentUser->role, ['client', 'funeral'])) {
+            \Log::warning('[payWithLink] Unauthorized role attempted to create payment link', [
+                'role' => $currentUser->role,
+                'user_id' => $currentUser->id
+            ]);
+            abort(403);
+        }
+
+        $convenienceFee = 25;
+        $amount = $booking->final_amount ?? ($booking->detail->amount ?? 0);
+        \Log::info('[payWithLink] Amounts:', [
+            'amount' => $amount,
+            'final_amount' => $booking->final_amount,
+            'detail_amount' => $booking->detail->amount ?? null,
+        ]);
+        $totalWithFee = $amount + $convenienceFee;
+
+        $secretKey = config('services.paymongo.secret');
+        \Log::info('[payWithLink] PayMongo secret key (masked):', ['secret' => substr($secretKey, 0, 5) . '****']);
+
+        if (empty($secretKey)) {
+            \Log::error('[payWithLink] Missing PayMongo secret key.');
+            abort(500, 'Missing PayMongo secret key.');
+        }
+
+        $description = "Payment for Package: " . ($booking->package->name ?? 'Package');
+        $remarks = "Booking ID: {$booking->id} | Initiator: " . ($currentUser->name ?? '');
+
+        \Log::info('[payWithLink] Payload data', [
+            'description' => $description,
+            'remarks' => $remarks,
+            'total_with_fee' => $totalWithFee,
+        ]);
+
+        $payload = [
+            "data" => [
+                "attributes" => [
+                    "amount" => intval(round($totalWithFee * 100)),
+                    "currency" => "PHP",
+                    "description" => $description,
+                    "remarks" => $remarks,
+                ]
+            ]
+        ];
+
+        \Log::info('[payWithLink] Payload JSON', $payload);
+
+        $response = \Illuminate\Support\Facades\Http::withHeaders([
+            "Authorization" => "Basic " . base64_encode($secretKey . ":"),
+            "Content-Type" => "application/json"
+        ])->post("https://api.paymongo.com/v1/links", $payload);
+
+        \Log::info('[payWithLink] PayMongo API response', [
+            'status' => $response->status(),
+            'body' => $response->body(),
+        ]);
+
+        $result = $response->json();
+
+        // Log for debugging
+        \Log::info('[payWithLink] PayMongo Link Response:', $result);
+
+        if (isset($result['data']['attributes']['checkout_url'])) {
+            $referenceId = $result['data']['id'];
+            $referenceNumber = $result['data']['attributes']['reference_number'] ?? null;
+
+            \Log::info('[payWithLink] PayMongo reference ID to save:', ['reference_id' => $referenceId]);
+            \Log::info('[payWithLink] PayMongo reference number to save:', ['reference_number' => $referenceNumber]);
+
+            // Find any existing payment for this booking
+            $payment = $booking->payments()->first();
+
+            if ($payment) {
+                \Log::info('[payWithLink] Existing payment found. Updating.', ['payment_id' => $payment->id]);
+                $payment->update([
+                    'amount' => $amount,
+                    'convenience_fee' => $convenienceFee,
+                    'status' => 'pending',
+                    'notes' => 'Payment Link updated. Awaiting payment. Ref#: ' . $referenceNumber,
+                    'reference_id' => $referenceId,
+                    'reference_number' => $referenceNumber,
+                    'raw_response' => json_encode($result),
+                ]);
+                \Log::info('[payWithLink] Existing payment updated', [
+                    'payment_id' => $payment->id,
+                    'fields' => [
+                        'amount' => $amount,
+                        'convenience_fee' => $convenienceFee,
+                        'status' => 'pending',
+                        'notes' => 'Payment Link updated. Awaiting payment. Ref#: ' . $referenceNumber,
+                        'reference_id' => $referenceId,
+                        'reference_number' => $referenceNumber,
+                        'raw_response' => '[json]'
+                    ]
+                ]);
+            } else {
+                \Log::info('[payWithLink] No existing payment found. Creating new payment row...');
+                $payment = $booking->payments()->create([
+                    'amount' => $amount,
+                    'convenience_fee' => $convenienceFee,
+                    'method' => 'paymongo_link',
+                    'status' => 'pending',
+                    'notes'  => 'Payment Link created. Awaiting payment. Ref#: ' . $referenceNumber,
+                    'reference_id' => $referenceId,
+                    'reference_number' => $referenceNumber,
+                    'raw_response' => json_encode($result),
+                ]);
+                \Log::info('[payWithLink] New payment created', [
+                    'payment_id' => $payment->id,
+                    'fields' => [
+                        'amount' => $amount,
+                        'convenience_fee' => $convenienceFee,
+                        'method' => 'paymongo_link',
+                        'status' => 'pending',
+                        'notes'  => 'Payment Link created. Awaiting payment. Ref#: ' . $referenceNumber,
+                        'reference_id' => $referenceId,
+                        'reference_number' => $referenceNumber,
+                        'raw_response' => '[json]'
+                    ]
+                ]);
+            }
+
+            \Log::info('[payWithLink] Redirecting to checkout_url', [
+                'url' => $result['data']['attributes']['checkout_url']
+            ]);
+            return redirect($result['data']['attributes']['checkout_url']);
+        } else {
+            \Log::error('[payWithLink] No checkout_url found in PayMongo response!', ['response' => $result]);
+            return back()->withErrors(['payment' => 'Error creating payment link: ' . json_encode($result)]);
+        }
+    } catch (\Throwable $e) {
+        \Log::error('[payWithLink] Exception thrown', [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        abort(500, 'A server error occurred. Please contact support.');
+    }
+}
+
+
+
+    public function showPayment($bookingId)
+    {
+        $booking = \App\Models\Booking::findOrFail($bookingId);
+        return view('funeral.bookings.payment', compact('booking'));
+    }
+
+
+
+
+
+/*
+public function payWithPayMongo(Request $request, $bookingId)
+{
+    $booking = Booking::with(['payments', 'bookingAgent'])->findOrFail($bookingId);
+
+    // Allow: client, assigned agent, or parlor
+    $user = auth()->user();
+    $isClient = $booking->client_user_id === $user->id;
+    $isAgent = $booking->bookingAgent && $booking->bookingAgent->agent_user_id === $user->id;
+    $isParlor = $booking->funeral_home_id === $user->id;
+
+    if (!($isClient || $isAgent || $isParlor)) {
+        abort(403, 'Unauthorized payment attempt.');
+    }
+
+    // Get payment type (default to card)
+    $paymentType = $request->input('payment_type', 'card');
+    $amount = $booking->final_amount ?? $booking->detail->amount ?? 0;
+    $amountInCents = intval(round($amount * 100));
+
+    // For CARD payment
+    if ($paymentType === 'card') {
+        $validated = $request->validate([
+            'payment_method_id' => 'required|string',
+        ]);
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::withBasicAuth(env('PAYMONGO_SECRET_KEY'), '')
+                ->post('https://api.paymongo.com/v1/payment_intents', [
+                    'data' => [
+                        'attributes' => [
+                            'amount' => $amountInCents,
+                            'payment_method_allowed' => ['card'],
+                            'currency' => 'PHP',
+                            'description' => 'Funeral Booking Payment #' . $booking->id,
+                        ]
+                    ]
+                ]);
+            $responseData = $response->json();
+            if (!isset($responseData['data'])) {
+                \Log::error('PayMongo CARD error', $responseData);
+                $errorMessage = $responseData['errors'][0]['detail'] ?? 'Unknown error creating PaymentIntent.';
+                return back()->withErrors(['payment' => 'Card payment failed: ' . $errorMessage]);
+            }
+
+            $paymentIntent = $responseData['data']['id'];
+            $clientKey = $responseData['data']['attributes']['client_key'];
+
+            $attach = \Illuminate\Support\Facades\Http::withBasicAuth(env('PAYMONGO_SECRET_KEY'), '')
+                ->post("https://api.paymongo.com/v1/payment_intents/{$paymentIntent}/attach", [
+                    'data' => [
+                        'attributes' => [
+                            'payment_method' => $validated['payment_method_id'],
+                            'client_key' => $clientKey,
+                        ]
+                    ]
+                ]);
+            $attachData = $attach->json();
+
+            if (!isset($attachData['data'])) {
+                \Log::error('PayMongo CARD attach error', $attachData);
+                $errorMessage = $attachData['errors'][0]['detail'] ?? 'Unknown error attaching payment method.';
+                return back()->withErrors(['payment' => 'Card payment failed: ' . $errorMessage]);
+            }
+
+            $attachedIntent = $attachData['data']['attributes'];
+
+            if ($attachedIntent['status'] == 'succeeded') {
+                $booking->payments()->create([
+                    'amount' => $amount,
+                    'method' => 'paymongo_card',
+                    'status' => 'paid',
+                    'notes'  => 'Paid via card (PayMongo JS)',
+                ]);
+                $booking->status = 'paid';
+                $booking->save();
+                return redirect()->route('funeral.dashboard')
+                    ->with('success', 'Payment successful! Thank you for your payment.');
+            } else {
+                return back()->withErrors(['payment' => 'Card declined or payment failed.']);
+            }
+        } catch (\Exception $e) {
+            return back()->withErrors(['payment' => 'Payment failed: ' . $e->getMessage()]);
+        }
+    }
+
+    // For GCASH payment (QR/E-Wallet)
+    if ($paymentType === 'gcash') {
+        try {
+            $response = \Illuminate\Support\Facades\Http::withBasicAuth(env('PAYMONGO_SECRET_KEY'), '')
+                ->post('https://api.paymongo.com/v1/sources', [
+                    'data' => [
+                        'attributes' => [
+                            'amount' => $amountInCents,
+                            'redirect' => [
+                                'success' => route('funeral.bookings.paymongo.success', $booking->id),
+                                'failed' => route('funeral.bookings.paymongo.failed', $booking->id),
+                            ],
+                            'type' => 'gcash',
+                            'currency' => 'PHP',
+                        ]
+                    ]
+                ]);
+            $responseData = $response->json();
+
+            if (!isset($responseData['data'])) {
+                \Log::error('PayMongo GCASH error', $responseData);
+                $errorMessage = $responseData['errors'][0]['detail'] ?? 'Unknown error creating GCash source.';
+                return back()->withErrors(['payment' => 'GCash payment failed: ' . $errorMessage]);
+            }
+
+            $source = $responseData['data'];
+            $redirectUrl = $source['attributes']['redirect']['checkout_url'] ?? null;
+
+            $booking->payments()->create([
+                'amount' => $amount,
+                'method' => 'paymongo_gcash',
+                'status' => 'pending',
+                'notes' => 'GCash payment initiated. Awaiting confirmation.',
+                'reference_id' => $source['id'],
+            ]);
+            $booking->status = 'pending_payment';
+            $booking->save();
+
+            if ($redirectUrl) {
+                return redirect($redirectUrl);
+            } else {
+                return back()->withErrors(['payment' => 'Failed to create GCash source.']);
+            }
+        } catch (\Exception $e) {
+            return back()->withErrors(['payment' => 'GCash payment failed: ' . $e->getMessage()]);
+        }
+    }
+
+    return back()->withErrors(['payment' => 'Invalid payment method.']);
+}
+
+public function showPayment($bookingId)
+{
+    $booking = Booking::with(['detail', 'customizedPackage', 'bookingAgent'])->findOrFail($bookingId);
+
+    // Allow: client, assigned agent, or parlor
+    $user = auth()->user();
+    $isClient = $booking->client_user_id === $user->id;
+    $isAgent = $booking->bookingAgent && $booking->bookingAgent->agent_user_id === $user->id;
+    $isParlor = $booking->funeral_home_id === $user->id;
+
+    if (!($isClient || $isAgent || $isParlor)) {
+        abort(403, 'Unauthorized access.');
+    }
+
+    $amount = $booking->final_amount ?? 0;
+    $amountInCents = intval(round($amount * 100));
+
+    return view('funeral.bookings.payment', [
+        'booking' => $booking,
+        'amount' => $amount,
+        'amountInCents' => $amountInCents,
+    ]);
+}
+
+
+public function paymongoSuccess($bookingId)
+{
+    // Update payment as paid (ideally check via webhook, but update here for demo)
+    $booking = \App\Models\Booking::findOrFail($bookingId);
+    $payment = $booking->payments()->where('method', 'paymongo_gcash')->latest()->first();
+    if ($payment && $payment->status !== 'paid') {
+        $payment->status = 'paid';
+        $payment->save();
+        $booking->status = 'paid';
+        $booking->save();
+
+        $packageName = $booking->package->name ?? 'the package';
+        $clientName  = $booking->client->name ?? 'the client';
+        $parlorName  = $booking->funeralHome->name ?? 'Funeral Parlor';
+
+        // ==== Notify Assigned Agent (if any) ====
+        if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+            $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+            if ($agentUser) {
+                $agentMsg = "Your client <b>{$clientName}</b> has <b>PAID</b> for booking <b>#{$booking->id}</b> ({$packageName}) at <b>{$parlorName}</b>. The funeral parlor will now proceed with the next steps.";
+                $agentUser->notify(new \App\Notifications\BookingStatusChanged($booking, $agentMsg, 'agent'));
+            }
+        }
+
+        // ==== Notify Client ====
+        if ($booking->client) {
+            $clientMsg = "You have <b>SUCCESSFULLY PAID</b> for your booking <b>#{$booking->id}</b> ({$packageName}) at <b>{$parlorName}</b>. The funeral parlor will proceed with the next steps.";
+            $booking->client->notify(new \App\Notifications\BookingStatusChanged($booking, $clientMsg, 'client'));
+        }
+    }
+
+    return redirect()->route('funeral.bookings.index')->with('success', 'Payment successful!');
+}
+
+
+
+public function paymongoFailed($bookingId)
+{
+    // Optionally, you can mark the latest GCash payment as failed/cancelled for audit.
+    $booking = \App\Models\Booking::findOrFail($bookingId);
+
+    // Find the most recent GCash payment record for this booking
+    $payment = $booking->payments()
+        ->where('method', 'paymongo_gcash')
+        ->orderByDesc('created_at')
+        ->first();
+
+    if ($payment && $payment->status !== 'paid') {
+        $payment->status = 'failed';
+        $payment->notes = 'User was redirected to failed/cancelled from PayMongo GCash.';
+        $payment->save();
+    }
+
+    // Optionally revert booking status if needed
+    if ($booking->status == 'pending_payment') {
+        $booking->status = 'in_progress'; // or whatever previous status
+        $booking->save();
+    }
+
+    return redirect()
+        ->route('funeral.bookings.payment', $bookingId)
+        ->withErrors(['payment' => 'GCash payment was cancelled or failed. Please try again.']);
+}
+*/
 
 
 }

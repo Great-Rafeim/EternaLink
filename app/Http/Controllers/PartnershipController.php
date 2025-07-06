@@ -8,34 +8,38 @@ use App\Models\User;
 
 class PartnershipController extends Controller
 {
-    public function index()
-    {
-        $user = auth()->user();
+public function index()
+{
+    $user = auth()->user();
 
-        $sentRequests = $user->sentPartnershipRequests()
-            ->with('partner')
-            ->where('status', '!=', 'rejected')  // Exclude rejected requests
-            ->get();
+    $sentRequests = $user->sentPartnershipRequests()
+        ->with(['partner', 'partner.funeralParlor'])
+        ->where('status', '!=', 'rejected')
+        ->get();
 
-        $receivedRequests = $user->receivedPartnershipRequests()
-            ->with('requester')
-            ->where('status', 'pending')
-            ->get();
+    $receivedRequests = $user->receivedPartnershipRequests()
+        ->with(['requester', 'requester.funeralParlor'])
+        ->where('status', 'pending')
+        ->get();
 
-        $activePartnerships = Partnership::where(function ($q) use ($user) {
+    $activePartnerships = Partnership::where(function ($q) use ($user) {
             $q->where('requester_id', $user->id)
               ->orWhere('partner_id', $user->id);
         })
         ->where('status', 'accepted')
-        ->with(['requester', 'partner'])
+        ->with([
+            'requester', 'partner',
+            'requester.funeralParlor', 'partner.funeralParlor'
+        ])
         ->get();
 
-        return view('funeral.partnerships.index', compact(
-            'activePartnerships',
-            'sentRequests',
-            'receivedRequests'
-        ));
-    }
+    return view('funeral.partnerships.index', compact(
+        'activePartnerships',
+        'sentRequests',
+        'receivedRequests'
+    ));
+}
+
 
     public function find(Request $request)
     {

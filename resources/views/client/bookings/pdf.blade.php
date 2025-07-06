@@ -7,11 +7,7 @@
         body { font-family: DejaVu Sans, Arial, Helvetica, sans-serif; font-size: 13px; margin: 0; padding: 0; }
         .container { padding: 30px 38px 0 38px; }
         .header { text-align: center; margin-bottom: 16px; }
-        h1, h2, h3, h4, h5 { margin: 0; padding: 0; }
         .parlor-logo { max-width: 110px; max-height: 110px; border-radius: 10px; margin-bottom: 8px;}
-        .parlor-info { margin-bottom: 10px; }
-        .parlor-name { font-size: 1.4rem; font-weight: bold; color: #153b5c; }
-        .parlor-address, .parlor-contact { font-size: 1rem; color: #555; }
         .section-title { margin: 22px 0 7px 0; font-weight: bold; font-size: 16px; border-bottom: 2px solid #153b5c; color: #153b5c; }
         .badge { padding: 2px 10px; border-radius: 7px; font-size: 12px; display: inline-block; }
         .bg-success { background: #d4edda; color: #155724; }
@@ -23,57 +19,15 @@
         .table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
         th, td { border: 1px solid #ddd; padding: 7px 6px; }
         th { background: #f5f5f5; text-align: left; }
-        ul, ol { padding-left: 16px; }
         .footer { text-align: center; font-size: 11px; color: #aaa; border-top: 1px dashed #eee; margin-top: 32px; padding: 5px 0 8px 0; }
         .text-muted { color: #888; font-size: 12px; }
-        .mb-2 { margin-bottom: 8px; }
-        .mb-3 { margin-bottom: 13px; }
-        .mb-4 { margin-bottom: 22px; }
-        .mt-2 { margin-top: 10px; }
-        .mt-3 { margin-top: 16px; }
         .fw-bold { font-weight: bold; }
-        .section-list { list-style: none; padding: 0; margin: 0 0 15px 0; }
-        .list-header {
-            background: #e9f1fa;
-            color: #1e334c;
-            font-weight: bold;
-            border-bottom: 2px solid #b9cbe5;
-        }
-        .list-group-item { border-bottom: 1px solid #ddd; padding: 7px 6px; }
         .asset-row { background: #f5f8fc; }
         .to-be-decided-row { background: #f8f8f8; color: #888; font-style: italic; }
-        .timeline {
-            border-left: 3px solid #b0c4e9;
-            margin: 20px 0 24px 0;
-            padding-left: 20px;
-        }
-        .timeline-entry {
-            position: relative;
-            margin-bottom: 14px;
-        }
-        .timeline-dot {
-            width: 13px;
-            height: 13px;
-            border-radius: 50%;
-            background: #0d6efd;
-            border: 2px solid #fff;
-            position: absolute;
-            left: -27px;
-            top: 6px;
-        }
-        .timeline-meta { font-size: 12px; color: #2a4b7c; margin-bottom: 2px; }
-        .timeline-message {
-            background: #f4f9ff;
-            border-radius: 6px;
-            padding: 6px 11px;
-            margin-top: 2px;
-            border-left: 3px solid #a5caee;
-        }
     </style>
 </head>
 <body>
 <div class="container">
-
     {{-- HEADER --}}
     <div class="header">
         @php
@@ -83,33 +37,32 @@
         @if($imgPath && file_exists($imgPath))
             <img src="{{ $imgPath }}" class="parlor-logo" alt="Funeral Parlor Logo">
         @endif
-        <div class="parlor-info">
-            <div class="parlor-name">{{ $parlor->name ?? 'Funeral Parlor' }}</div>
-            @if($parlor && $parlor->address)
-                <div class="parlor-address">{{ $parlor->address }}</div>
-            @endif
-            @if($parlor && $parlor->contact_number)
-                <div class="parlor-contact">Tel: {{ $parlor->contact_number }}</div>
-            @endif
-            @if($parlor && $parlor->contact_email)
-                <div class="parlor-contact">Email: {{ $parlor->contact_email }}</div>
-            @endif
-        </div>
+        <div style="font-size:1.4rem; font-weight: bold; color: #153b5c;">{{ $parlor->name ?? 'Funeral Parlor' }}</div>
+        @if($parlor && $parlor->address)
+            <div style="font-size:1rem; color:#555;">{{ $parlor->address }}</div>
+        @endif
+        @if($parlor && $parlor->contact_number)
+            <div style="font-size:1rem; color:#555;">Tel: {{ $parlor->contact_number }}</div>
+        @endif
+        @if($parlor && $parlor->contact_email)
+            <div style="font-size:1rem; color:#555;">Email: {{ $parlor->contact_email }}</div>
+        @endif
         <div class="text-muted">Booking Service Details</div>
     </div>
 
     {{-- STATUS --}}
     @php
         $statuses = [
-            'pending'          => ['Pending', 'bg-warning'],
-            'assigned'         => ['Agent Assigned', 'bg-info'],
-            'confirmed'        => ['Confirmed', 'bg-success'],
-            'in_progress'      => ['Client Filling Forms', 'bg-secondary'],
+            'pending' => ['Pending', 'bg-warning'],
+            'assigned' => ['Agent Assigned', 'bg-info'],
+            'confirmed' => ['Confirmed', 'bg-success'],
+            'in_progress' => ['Client Filling Forms', 'bg-secondary'],
             'for_initial_review' => ['For Initial Review', 'bg-primary'],
-            'for_review'       => ['For Final Review', 'bg-secondary'],
-            'ongoing'          => ['Ongoing', 'bg-primary'],
-            'done'             => ['Completed', 'bg-success'],
-            'declined'         => ['Declined', 'bg-danger'],
+            'for_review' => ['For Final Review', 'bg-secondary'],
+            'ongoing' => ['Ongoing', 'bg-primary'],
+            'done' => ['Completed', 'bg-success'],
+            'declined' => ['Declined', 'bg-danger'],
+            'completed' => ['Completed', 'bg-success'],
         ];
         $status = $statuses[$booking->status] ?? [ucfirst(str_replace('_', ' ', $booking->status)), 'bg-info'];
         $useCustomized = $booking->customized_package_id && $booking->customizedPackage;
@@ -123,6 +76,7 @@
                     'quantity' => $ci->quantity,
                     'is_asset' => $ci->inventoryItem->category->is_asset ?? false,
                     'category_id' => $ci->inventoryItem->category->id ?? null,
+                    'unit_price' => $ci->unit_price ?? 0,
                 ];
             })
             : $booking->package->items->map(function($item) {
@@ -133,6 +87,7 @@
                     'quantity' => $item->pivot->quantity ?? 1,
                     'is_asset' => $item->category->is_asset ?? false,
                     'category_id' => $item->category->id ?? null,
+                    'unit_price' => $item->selling_price ?? $item->price ?? 0,
                 ];
             });
         $totalAmount = $customized
@@ -142,6 +97,7 @@
             ));
         $details = $booking->detail;
         $assetCategories = $assetCategories ?? [];
+        $assetCategoryPrices = $assetCategoryPrices ?? [];
         $assets = collect($packageItems)->filter(fn($pkg) => $pkg['is_asset'] ?? false);
         $consumables = collect($packageItems)->filter(fn($pkg) => !($pkg['is_asset'] ?? false));
         $assetCategoryIdsInItems = $assets->pluck('category_id')->unique()->toArray();
@@ -152,7 +108,7 @@
         <span class="text-muted">Booking #{{ $booking->id }}</span>
     </div>
 
-    {{-- PACKAGE HEADER: Name + Final Price --}}
+    {{-- PACKAGE HEADER --}}
     <div class="mb-2">
         <div class="section-title">Client & Package Info</div>
         <table class="table">
@@ -183,160 +139,285 @@
         </table>
     </div>
 
-    {{-- PACKAGE INCLUSIONS (styled as in show.blade) --}}
-    <div class="mb-2">
-        <div class="section-title">Package Inclusions</div>
-        <table class="table">
-            <tr class="list-header">
-                <th>Item</th>
-                <th>Category</th>
-                <th>Brand</th>
-                <th style="width:55px;">Qty</th>
-            </tr>
-            @forelse($consumables as $pkg)
-                <tr>
-                    <td>{{ $pkg['item'] }}</td>
-                    <td>{{ $pkg['category'] }}</td>
-                    <td>{{ $pkg['brand'] }}</td>
-                    <td>{{ $pkg['quantity'] }}</td>
-                </tr>
-            @empty
-                <tr>
-                    <td colspan="4" class="text-muted">No consumable items included.</td>
-                </tr>
-            @endforelse
-
-            {{-- Asset Items --}}
-            @foreach($assets as $pkg)
-                <tr class="asset-row">
-                    <td>
-                        {{ $pkg['item'] }}
-                        <span class="badge bg-secondary">Asset</span>
-                    </td>
-                    <td>{{ $pkg['category'] }}</td>
-                    <td>{{ $pkg['brand'] }}</td>
-                    <td>{{ $pkg['quantity'] }}</td>
-                </tr>
-            @endforeach
-
-            {{-- Asset categories not yet assigned --}}
-            @foreach($assetCategories as $assetCategory)
-                @if(!in_array($assetCategory->id, $assetCategoryIdsInItems))
-                    <tr class="to-be-decided-row">
-                        <td colspan="4">
-                            <span class="fw-bold">{{ $assetCategory->name }}</span>
-                        </td>
-                    </tr>
-                @endif
-            @endforeach
-        </table>
-    </div>
-
-    {{-- SERVICE TIMELINE (updates) --}}
-    @if(isset($serviceLogs) && $serviceLogs->count())
-        <div class="mb-2">
-            <div class="section-title">Service Updates</div>
-            <div class="timeline">
-                @foreach($serviceLogs as $log)
-                    <div class="timeline-entry">
-                        <div class="timeline-dot"></div>
-                        <div class="timeline-meta">
-                            {{ $log->user->name ?? 'Funeral Staff' }}
-                            <span style="color:#888; margin-left:8px;">{{ $log->created_at->format('M d, Y h:i A') }}</span>
-                        </div>
-                        <div class="timeline-message">{!! nl2br(e($log->message)) !!}</div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    @endif
-
-{{-- DECEASED DETAILS --}}
+ {{-- PACKAGE INCLUSIONS --}}
 <div class="mb-2">
-    <div class="section-title">Deceased Personal Details</div>
+    <div class="section-title">Package Inclusions</div>
     <table class="table">
         <tr>
-            <th>Full Name</th>
-            <td>
-                {{ collect([$details?->deceased_first_name, $details?->deceased_middle_name, $details?->deceased_last_name])->filter()->join(' ') ?: '—' }}
-                @if($details?->deceased_nickname)
-                    (“{{ $details->deceased_nickname }}”)
-                @endif
-            </td>
-            <th>Residence</th>
-            <td>{{ $details?->deceased_residence ?? '—' }}</td>
+            <th>Item</th>
+            <th>Category</th>
+            <th>Brand</th>
+            <th style="width:60px;">Qty</th>
+            <th style="width:110px;">Unit Price</th>
+            <th style="width:130px;">Subtotal</th>
         </tr>
-        <tr>
-            <th>Sex</th>
-            <td>
-                @if(isset($details->deceased_sex))
-                    {{ $details->deceased_sex === 'M' ? 'Male' : ($details->deceased_sex === 'F' ? 'Female' : $details->deceased_sex) }}
-                @else
-                    —
-                @endif
-            </td>
-            <th>Civil Status</th>
-            <td>{{ $details?->deceased_civil_status ?? '—' }}</td>
-        </tr>
-        <tr>
-            <th>Birthday</th>
-            <td>{{ $details?->deceased_birthday ? \Carbon\Carbon::parse($details->deceased_birthday)->format('M d, Y') : '—' }}</td>
-            <th>Age</th>
-            <td>{{ $details?->deceased_age ?? '—' }}</td>
-        </tr>
-        <tr>
-            <th>Date of Death</th>
-            <td>{{ $details?->deceased_date_of_death ? \Carbon\Carbon::parse($details->deceased_date_of_death)->format('M d, Y') : '—' }}</td>
-            <th>Time of Death</th>
-            <td>{{ $details?->deceased_time_of_death ?? '—' }}</td>
-        </tr>
-        <tr>
-            <th>Cause of Death</th>
-            <td>{{ $details?->deceased_cause_of_death ?? '—' }}</td>
-            <th>Place of Death</th>
-            <td>{{ $details?->deceased_place_of_death ?? '—' }}</td>
-        </tr>
-        <tr>
-            <th>Religion</th>
-            <td>{{ $details?->deceased_religion ?? '—' }}</td>
-            <th>Occupation</th>
-            <td>{{ $details?->deceased_occupation ?? '—' }}</td>
-        </tr>
-        <tr>
-            <th>Citizenship</th>
-            <td>{{ $details?->deceased_citizenship ?? '—' }}</td>
-            <th>Father's Name</th>
-            <td>
-                {{ collect([$details?->deceased_father_first_name, $details?->deceased_father_middle_name, $details?->deceased_father_last_name])->filter()->join(' ') ?: '—' }}
-            </td>
-        </tr>
-        <tr>
-            <th>Mother's Maiden Name</th>
-            <td>
-                {{ collect([$details?->deceased_mother_first_name, $details?->deceased_mother_middle_name, $details?->deceased_mother_last_name])->filter()->join(' ') ?: '—' }}
-            </td>
-            <th>Corpse Disposal</th>
-            <td>{{ $details?->corpse_disposal ?? '—' }}</td>
-        </tr>
-        {{-- SHOW DECEASED IMAGE --}}
-        @if(!empty($details?->deceased_image))
-        <tr>
-            <th>Deceased Image</th>
-            <td colspan="3">
-                @php
-                    $imgPath = public_path('storage/' . $details->deceased_image);
-                @endphp
-                @if(file_exists($imgPath))
-                    <img src="{{ $imgPath }}" alt="Deceased Image" style="width:120px;height:120px;object-fit:cover;border-radius:10px;border:1px solid #bbb;">
-                @else
-                    <span class="text-muted">Image not found.</span>
-                @endif
-            </td>
-        </tr>
+        @php
+            $consumableTotal = 0;
+        @endphp
+        @forelse($consumables as $pkg)
+            @php
+                $unit = floatval($pkg['unit_price'] ?? 0);
+                $qty = intval($pkg['quantity']);
+                $subtotal = $unit * $qty;
+                $consumableTotal += $subtotal;
+            @endphp
+            <tr>
+                <td>{{ $pkg['item'] }}</td>
+                <td>{{ $pkg['category'] }}</td>
+                <td>{{ $pkg['brand'] }}</td>
+                <td>{{ $qty }}</td>
+                <td>₱{{ number_format($unit, 2) }}</td>
+                <td>₱{{ number_format($subtotal, 2) }}</td>
+            </tr>
+        @empty
+            <tr>
+                <td colspan="6" class="text-muted">No consumable items included.</td>
+            </tr>
+        @endforelse
+        @if($consumableTotal > 0)
+            <tr style="background:#f9f9f9;">
+                <td colspan="5" class="fw-bold text-end">Consumables Total</td>
+                <td class="fw-bold">₱{{ number_format($consumableTotal, 2) }}</td>
+            </tr>
         @endif
     </table>
 </div>
 
+{{-- ASSET CATEGORIES --}}
+<div class="mb-2">
+    <div class="section-title">Bookable Assets/Items</div>
+    <table class="table">
+        <tr>
+            <th>Asset Item / Category</th>
+            <th>Category Price</th>
+        </tr>
+        @php $assetTotal = 0; @endphp
+        @foreach($assets as $pkg)
+            @php
+                $catId = $pkg['category_id'];
+                $catPrice = $assetCategoryPrices[$catId] ?? 0;
+                $assetTotal += $catPrice;
+            @endphp
+            <tr class="asset-row">
+                <td>
+                    {{ $pkg['item'] }}
+                    <span class="badge bg-secondary">Asset</span>
+                </td>
+                <td>₱{{ number_format($catPrice, 2) }}</td>
+            </tr>
+        @endforeach
+        @foreach($assetCategories as $assetCategory)
+            @if(!in_array($assetCategory->id, $assetCategoryIdsInItems))
+                @php
+                    $catPrice = $assetCategoryPrices[$assetCategory->id] ?? 0;
+                    $assetTotal += $catPrice;
+                @endphp
+                <tr class="to-be-decided-row">
+                    <td>
+                        <span class="fw-bold">{{ $assetCategory->name }}</span>
+                        <span class="badge bg-secondary">Asset</span>
+                    </td>
+                    <td>₱{{ number_format($catPrice, 2) }}</td>
+                </tr>
+            @endif
+        @endforeach
+        @if(($assetCategories ?? collect())->count())
+            <tr style="background:#f9f9f9;">
+                <td class="fw-bold text-end">Assets Total</td>
+                <td class="fw-bold">₱{{ number_format($assetTotal, 2) }}</td>
+            </tr>
+        @endif
+    </table>
+</div>
+
+{{-- OVERALL TOTAL, DISCOUNT, VAT, GRAND TOTAL --}}
+@php
+    // Sum up package items, asset total, etc. Use package custom price or fallback.
+    $preDiscountAmount = $customized
+        ? $customized->custom_total_price
+        : ($booking->package->total_price ?? ($consumableTotal + $assetTotal));
+
+    $discount = $booking->is_discount_beneficiary ? ($booking->discount_amount ?? 0) : 0;
+    $netAmount = max($preDiscountAmount - $discount, 0);
+
+    // VAT is always based on the net amount
+    $vatRate = 0.12;
+    $vat = $netAmount * $vatRate;
+    $amountExVat = $netAmount - $vat;
+
+    // Add any other fees (from booking details, e.g. delivery, etc.)
+    $otherFee = isset($details->other_fee) ? floatval($details->other_fee) : 0;
+    $grandTotal = $netAmount + $otherFee;
+@endphp
+
+<div class="mb-2">
+    <div class="section-title">Summary of Charges</div>
+    <table class="table" style="width: 360px; float: right; margin-bottom: 0;">
+        <tr>
+            <th style="width: 180px;">Subtotal</th>
+            <td style="text-align:right;">₱{{ number_format($preDiscountAmount, 2) }}</td>
+        </tr>
+        @if($discount > 0)
+        <tr>
+            <th>Discount</th>
+            <td style="text-align:right;">- ₱{{ number_format($discount, 2) }}</td>
+        </tr>
+        @endif
+        <tr>
+            <th>Net Amount (VAT Inclusive)</th>
+            <td style="text-align:right;">₱{{ number_format($netAmount, 2) }}</td>
+        </tr>
+        <tr>
+            <th>VATable Sales</th>
+            <td style="text-align:right;">₱{{ number_format($amountExVat, 2) }}</td>
+        </tr>
+        <tr>
+            <th>VAT (12%)</th>
+            <td style="text-align:right;">₱{{ number_format($vat, 2) }}</td>
+        </tr>
+        @if($otherFee > 0)
+        <tr>
+            <th>Other Fee</th>
+            <td style="text-align:right;">₱{{ number_format($otherFee, 2) }}</td>
+        </tr>
+        @endif
+        <tr>
+            <th class="fw-bold" style="font-size: 15px;">Grand Total</th>
+            <td class="fw-bold" style="font-size: 15px; text-align:right;">
+                ₱{{ number_format($grandTotal, 2) }}
+            </td>
+        </tr>
+    </table>
+    <div style="clear:both;"></div>
+</div>
+
+    {{-- SERVICE & PAYMENT --}}
+    <div class="mb-2">
+        <div class="section-title">Service & Payment</div>
+        <table class="table">
+            <tr>
+                <th>Service</th>
+                <td>{{ $details?->service ?? $booking->package->name ?? '—' }}</td>
+                <th>Package Amount</th>
+                <td>₱{{ number_format($details?->amount ?? $totalAmount, 2) }}</td>
+            </tr>
+            @if($booking->is_discount_beneficiary)
+            <tr>
+                <th>Discount Amount</th>
+                <td colspan="3" class="text-success">
+                    - ₱{{ number_format($booking->discount_amount ?? 0, 2) }}
+                </td>
+            </tr>
+            @endif
+            <tr>
+                <th>Other Fee</th>
+                <td>
+                    @if($details?->other_fee)
+                        ₱{{ number_format($details->other_fee, 2) }}
+                    @else
+                        <span class="text-warning">Not set</span>
+                    @endif
+                </td>
+                <th>Deposit</th>
+                <td>{{ $details?->deposit ?? '—' }}</td>
+            </tr>
+            <tr>
+                <th>CSWD</th>
+                <td>{{ $details?->cswd ?? '—' }}</td>
+                <th>DSWD</th>
+                <td>{{ $details?->dswd ?? '—' }}</td>
+            </tr>
+            <tr>
+                <th>Remarks</th>
+                <td colspan="3">{{ $details?->remarks ?? '—' }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {{-- DECEASED DETAILS --}}
+    <div class="mb-2">
+        <div class="section-title">Deceased Personal Details</div>
+        <table class="table">
+            <tr>
+                <th>Full Name</th>
+                <td>
+                    {{ collect([$details?->deceased_first_name, $details?->deceased_middle_name, $details?->deceased_last_name])->filter()->join(' ') ?: '—' }}
+                    @if($details?->deceased_nickname)
+                        (“{{ $details->deceased_nickname }}”)
+                    @endif
+                </td>
+                <th>Residence</th>
+                <td>{{ $details?->deceased_residence ?? '—' }}</td>
+            </tr>
+            <tr>
+                <th>Sex</th>
+                <td>
+                    @if(isset($details->deceased_sex))
+                        {{ $details->deceased_sex === 'M' ? 'Male' : ($details->deceased_sex === 'F' ? 'Female' : $details->deceased_sex) }}
+                    @else
+                        —
+                    @endif
+                </td>
+                <th>Civil Status</th>
+                <td>{{ $details?->deceased_civil_status ?? '—' }}</td>
+            </tr>
+            <tr>
+                <th>Birthday</th>
+                <td>{{ $details?->deceased_birthday ? \Carbon\Carbon::parse($details->deceased_birthday)->format('M d, Y') : '—' }}</td>
+                <th>Age</th>
+                <td>{{ $details?->deceased_age ?? '—' }}</td>
+            </tr>
+            <tr>
+                <th>Date of Death</th>
+                <td>{{ $details?->deceased_date_of_death ? \Carbon\Carbon::parse($details->deceased_date_of_death)->format('M d, Y') : '—' }}</td>
+                <th>Time of Death</th>
+                <td>{{ $details?->deceased_time_of_death ?? '—' }}</td>
+            </tr>
+            <tr>
+                <th>Cause of Death</th>
+                <td>{{ $details?->deceased_cause_of_death ?? '—' }}</td>
+                <th>Place of Death</th>
+                <td>{{ $details?->deceased_place_of_death ?? '—' }}</td>
+            </tr>
+            <tr>
+                <th>Religion</th>
+                <td>{{ $details?->deceased_religion ?? '—' }}</td>
+                <th>Occupation</th>
+                <td>{{ $details?->deceased_occupation ?? '—' }}</td>
+            </tr>
+            <tr>
+                <th>Citizenship</th>
+                <td>{{ $details?->deceased_citizenship ?? '—' }}</td>
+                <th>Father's Name</th>
+                <td>
+                    {{ collect([$details?->deceased_father_first_name, $details?->deceased_father_middle_name, $details?->deceased_father_last_name])->filter()->join(' ') ?: '—' }}
+                </td>
+            </tr>
+            <tr>
+                <th>Mother's Maiden Name</th>
+                <td>
+                    {{ collect([$details?->deceased_mother_first_name, $details?->deceased_mother_middle_name, $details?->deceased_mother_last_name])->filter()->join(' ') ?: '—' }}
+                </td>
+                <th>Corpse Disposal</th>
+                <td>{{ $details?->corpse_disposal ?? '—' }}</td>
+            </tr>
+            @if(!empty($details?->deceased_image))
+            <tr>
+                <th>Deceased Image</th>
+                <td colspan="3">
+                    @php
+                        $imgPath = public_path('storage/' . $details->deceased_image);
+                    @endphp
+                    @if(file_exists($imgPath))
+                        <img src="{{ $imgPath }}" alt="Deceased Image" style="width:120px;height:120px;object-fit:cover;border-radius:10px;border:1px solid #bbb;">
+                    @else
+                        <span class="text-muted">Image not found.</span>
+                    @endif
+                </td>
+            </tr>
+            @endif
+        </table>
+    </div>
 
     {{-- DOCUMENTS --}}
     <div class="mb-2">
@@ -400,66 +481,6 @@
         </table>
     </div>
 
-    {{-- SERVICE & PAYMENT --}}
-    <div class="mb-2">
-        <div class="section-title">Service & Payment</div>
-        <table class="table">
-            <tr>
-                <th>Service</th>
-                <td>{{ $details?->service ?? $booking->package->name ?? '—' }}</td>
-                <th>Package Amount</th>
-                <td>₱{{ number_format($details?->amount ?? $totalAmount, 2) }}</td>
-            </tr>
-            <tr>
-                <th>Other Fee</th>
-                <td>
-                    @if($details?->other_fee)
-                        ₱{{ number_format($details->other_fee, 2) }}
-                    @else
-                        <span class="text-warning">Not set</span>
-                    @endif
-                </td>
-                <th>Deposit</th>
-                <td>{{ $details?->deposit ?? '—' }}</td>
-            </tr>
-            <tr>
-                <th>CSWD</th>
-                <td>{{ $details?->cswd ?? '—' }}</td>
-                <th>DSWD</th>
-                <td>{{ $details?->dswd ?? '—' }}</td>
-            </tr>
-        </table>
-    </div>
-
-    {{-- CERTIFICATION --}}
-    <div class="mb-2">
-        <div class="section-title">Certification</div>
-        <table class="table">
-            <tr>
-                <th>Certifier Name</th>
-                <td>{{ $details?->certifier_name ?? '—' }}</td>
-                <th>Relationship to Deceased</th>
-                <td>{{ $details?->certifier_relationship ?? '—' }}</td>
-            </tr>
-            <tr>
-                <th>Residence</th>
-                <td>{{ $details?->certifier_residence ?? '—' }}</td>
-                <th>Amount in Words</th>
-                <td>{{ $details?->certifier_amount ?? '—' }}</td>
-            </tr>
-            <tr>
-                <th>Signature</th>
-                <td colspan="3">
-                    @if(!empty($details?->certifier_signature_image))
-                        <img src="{{ $details->certifier_signature_image }}" alt="Signature" style="max-width:160px">
-                    @else
-                        {{ $details?->certifier_signature ?? '—' }}
-                    @endif
-                </td>
-            </tr>
-        </table>
-    </div>
-
     {{-- PHASE 2: Wake, Burial, Customization --}}
     <div class="mb-2">
         <div class="section-title">Wake, Burial & Customization</div>
@@ -479,22 +500,12 @@
             <tr>
                 <th>Cemetery / Crematory</th>
                 <td>{{ $details?->cemetery_or_crematory ?? '—' }}</td>
-                <th>Plot Reserved?</th>
-                <td>
-                    @if(!is_null($details?->has_plot_reserved))
-                        <span class="badge bg-{{ $details->has_plot_reserved ? 'success' : 'secondary' }}">
-                            {{ $details->has_plot_reserved ? 'Yes' : 'No' }}
-                        </span>
-                    @else
-                        —
-                    @endif
-                </td>
-            </tr>
-            <tr>
                 <th>Preferred Attire</th>
                 <td>{{ $details?->attire ?? '—' }}</td>
+            </tr>
+            <tr>
                 <th>Post Services</th>
-                <td>{{ $details?->post_services ?? '—' }}</td>
+                <td colspan="3">{{ $details?->post_services ?? '—' }}</td>
             </tr>
         </table>
     </div>
@@ -518,18 +529,14 @@
     </div>
 
     {{-- CEMETERY & PLOT --}}
-    @php
-        $cemetery = $booking->cemeteryBooking->cemetery ?? null;
-        $plot = $booking->cemeteryBooking->plot ?? null;
-    @endphp
     <div class="mb-2">
         <div class="section-title">Cemetery & Plot Details</div>
         <table class="table">
             <tr>
                 <th>Cemetery Name</th>
-                <td>{{ $cemetery?->user->name ?? 'Not specified' }}</td>
+                <td>{{ $cemeteryOwner?->name ?? 'Not specified' }}</td>
                 <th>Cemetery Address</th>
-                <td>{{ $cemetery?->address ?? 'Not specified' }}</td>
+                <td>{{ $plotCemetery?->address ?? 'Not specified' }}</td>
             </tr>
             <tr>
                 <th>Plot Number</th>
@@ -580,6 +587,27 @@
             @endif
         </table>
     </div>
+
+    {{-- SERVICE LOGS / UPDATES --}}
+    @if(isset($serviceLogs) && $serviceLogs->count())
+        <div class="mb-2">
+            <div class="section-title">Service Updates</div>
+            <table class="table">
+                <tr>
+                    <th>User</th>
+                    <th>Timestamp</th>
+                    <th>Message</th>
+                </tr>
+                @foreach($serviceLogs as $log)
+                    <tr>
+                        <td>{{ $log->user->name ?? 'Funeral Staff' }}</td>
+                        <td>{{ $log->created_at->format('M d, Y h:i A') }}</td>
+                        <td>{!! nl2br(e($log->message)) !!}</td>
+                    </tr>
+                @endforeach
+            </table>
+        </div>
+    @endif
 
     <div class="footer">
         Powered by EternaLink &mdash; Document generated {{ now()->format('M d, Y h:i A') }}

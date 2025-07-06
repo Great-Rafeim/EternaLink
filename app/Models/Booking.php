@@ -12,7 +12,7 @@ class Booking extends Model
     public const STATUS_CONFIRMED    = 'confirmed';    // Funeral parlor pre-approval (client can start filling forms)
     public const STATUS_FOR_PAYMENT_DETAILS = 'for_payment_details'; // Client can now fill in payment and certification
     public const STATUS_IN_PROGRESS  = 'in_progress';  // Client is filling up booking forms
-    public const STATUS_SUBMITTED    = 'for_review';    // Client submitted booking forms, pending final parlor review
+    public const STATUS_SUBMITTED    = 'for_review';   // Client submitted booking forms, pending final parlor review
     public const STATUS_APPROVED     = 'approved';     // Final parlor approval of all details
     public const STATUS_ONGOING      = 'ongoing';      // Funeral service started
     public const STATUS_COMPLETED    = 'completed';    // Service is done
@@ -20,6 +20,9 @@ class Booking extends Model
     public const STATUS_CANCELLED    = 'cancelled';
     public const STATUS_FOR_INITIAL_REVIEW = 'for_initial_review';    // After Phase 3, waiting for parlor to set fees
     public const STATUS_FOR_FINAL_REVIEW = 'for_final_review';    // After Phase 3, waiting for parlor to set fees
+    public const STATUS_PAYMENT_PENDING    = 'pending_payment';  // <--- NEW
+    public const STATUS_PAID               = 'paid';             // <--- NEW
+
     protected $fillable = [
         'client_user_id',
         'funeral_home_id',
@@ -30,17 +33,32 @@ class Booking extends Model
         'final_amount',
         'details',
         'death_certificate_path',
+        // Discount/payment fields
+        'is_discount_beneficiary',
+        'discount_amount',
+        'discount_proof_path',
+        'is_cremation',
     ];
-
+    protected $casts = [
+        // ...other casts,
+        'is_cremation' => 'boolean',
+    ];
     // RELATIONSHIPS
+    public function cardPayments()
+    {
+        return $this->hasMany(Payment::class, 'booking_id');
+    }
+
     public function getDecodedDetailsAttribute()
     {
         return $this->details ? json_decode($this->details, true) : [];
     }
-public function cemeteryBooking()
-{
-    return $this->hasOne(\App\Models\CemeteryBooking::class, 'booking_id');
-}
+
+    public function cemeteryBooking()
+    {
+        return $this->hasOne(\App\Models\CemeteryBooking::class, 'booking_id');
+    }
+
     public function client()
     {
         return $this->belongsTo(User::class, 'client_user_id');
@@ -60,10 +78,11 @@ public function cemeteryBooking()
     {
         return $this->belongsTo(User::class, 'agent_user_id');
     }
+
     public function clientUser()
-{
-    return $this->belongsTo(\App\Models\User::class, 'client_user_id');
-}
+    {
+        return $this->belongsTo(\App\Models\User::class, 'client_user_id');
+    }
 
     public function detail()
     {
@@ -75,19 +94,15 @@ public function cemeteryBooking()
         return $this->belongsTo(CustomizedPackage::class, 'customized_package_id');
     }
 
-    // In App\Models\Booking
+    public function latestCustomizationRequest()
+    {
+        return $this->hasOne(CustomizedPackage::class, 'booking_id')->latestOfMany();
+    }
 
-public function latestCustomizationRequest()
-{
-    return $this->hasOne(CustomizedPackage::class, 'booking_id')->latestOfMany();
-}
-
-// Or for all requests:
-public function customizationRequests()
-{
-    return $this->hasMany(CustomizedPackage::class, 'booking_id');
-}
-
+    public function customizationRequests()
+    {
+        return $this->hasMany(CustomizedPackage::class, 'booking_id');
+    }
 
     public function agentAssignment()
     {
@@ -115,7 +130,8 @@ public function customizationRequests()
             self::STATUS_CANCELLED   => ['label' => 'Cancelled', 'color' => 'danger',  'icon' => 'slash-circle'],
             self::STATUS_FOR_INITIAL_REVIEW  => ['label' => 'For Initial Review',  'color' => 'warning',   'icon' => 'journal-check'],
             self::STATUS_FOR_FINAL_REVIEW    => ['label' => 'For Final Review',    'color' => 'warning',   'icon' => 'file-earmark-check'],
-
+            self::STATUS_PAYMENT_PENDING => [ 'label' => 'Payment Pending', 'color' => 'info', 'icon'  => 'credit-card'],
+            self::STATUS_PAID => ['label' => 'Paid','color' => 'success','icon'  => 'check2-circle'],
         ];
     }
 
@@ -133,21 +149,23 @@ public function customizationRequests()
         return $this->hasMany(AssetReservation::class, 'booking_id');
     }
 
-public function bookingAgent()
-{
-    return $this->hasOne(\App\Models\BookingAgent::class, 'booking_id', 'id');
-}
-public function bookingDetail()
-{
-    return $this->hasOne(\App\Models\BookingDetail::class, 'booking_id');
-}
-public function cemetery()
-{
-    return $this->belongsTo(Cemetery::class, 'cemetery_id');
-}
+    public function bookingAgent()
+    {
+        return $this->hasOne(\App\Models\BookingAgent::class, 'booking_id', 'id');
+    }
 
-public function serviceLogs()
-{
-    return $this->hasMany(\App\Models\BookingServiceLog::class, 'booking_id');
-}
+    public function bookingDetail()
+    {
+        return $this->hasOne(\App\Models\BookingDetail::class, 'booking_id');
+    }
+
+    public function cemetery()
+    {
+        return $this->belongsTo(Cemetery::class, 'cemetery_id');
+    }
+
+    public function serviceLogs()
+    {
+        return $this->hasMany(\App\Models\BookingServiceLog::class, 'booking_id');
+    }
 }

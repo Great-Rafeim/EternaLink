@@ -16,17 +16,18 @@ class InventoryItemController extends Controller
 public function index(Request $request)
 {
     $query = InventoryItem::with('category')
-        ->where('inventory_items.funeral_home_id', auth()->id()); // Specify table
+        ->where('inventory_items.funeral_home_id', auth()->id());
 
     $request->validate([
-        'search'   => 'nullable|string|max:100',
-        'status'   => 'nullable|in:all,available,in_use,maintenance',
-        'category' => 'nullable|string|max:20',
-        'sort'     => 'nullable|string|max:50',
-        'direction'=> 'nullable|in:asc,desc',
+        'search'         => 'nullable|string|max:100',
+        'status'         => 'nullable|in:all,available,in_use,maintenance,reserved,shared_to_partner,borrowed_from_partner',
+        'category'       => 'nullable|string|max:20',
+        'sort'           => 'nullable|string|max:50',
+        'direction'      => 'nullable|in:asc,desc',
+        'shareable_only' => 'nullable|boolean',
+        'low_stock_only' => 'nullable|boolean',
     ]);
 
-    // Filtering logic (unchanged, but table-qualified where needed)
     if ($request->filled('search')) {
         $search = $request->input('search');
         $query->where(function ($q) use ($search) {
@@ -44,23 +45,34 @@ public function index(Request $request)
             $query->where('inventory_items.inventory_category_id', (int) $request->input('category'));
         }
     }
+    // Shareable only filter
+    if ($request->boolean('shareable_only')) {
+        $query->where('inventory_items.shareable', 1);
+    }
+    // Low stock only filter
+    if ($request->boolean('low_stock_only')) {
+        $query->whereColumn('inventory_items.quantity', '<=', 'inventory_items.low_stock_threshold')
+              ->whereNotNull('inventory_items.low_stock_threshold');
+    }
 
     $sortable = [
         'name', 'brand', 'quantity', 'low_stock_threshold', 'price', 'selling_price', 'expiry_date', 'status', 'shareable_quantity'
     ];
 
+    // Sorting logic
     if ($request->filled('sort') && in_array($request->input('sort'), $sortable)) {
         $sort = $request->input('sort');
         $direction = $request->input('direction', 'asc');
-        $query->orderBy("inventory_items.$sort", $direction); // Table qualified
+        $query->orderBy("inventory_items.$sort", $direction);
     } elseif ($request->input('sort') === 'category') {
         $direction = $request->input('direction', 'asc');
         $query->leftJoin('inventory_categories as cat', 'cat.id', '=', 'inventory_items.inventory_category_id')
-            ->where('inventory_items.funeral_home_id', auth()->id()) // Table qualified
+            ->where('inventory_items.funeral_home_id', auth()->id())
             ->orderBy('cat.name', $direction)
             ->select('inventory_items.*');
     } else {
-        $query->orderBy('inventory_items.name', 'asc'); // Table qualified, default ascending
+        // Default: ascending by name (for predictable table order)
+        $query->orderBy('inventory_items.name', 'asc');
     }
 
     $categories = InventoryCategory::where('funeral_home_id', auth()->id())
@@ -70,6 +82,8 @@ public function index(Request $request)
 
     return view('funeral.items.index', compact('items', 'categories'));
 }
+
+
 
 
 
@@ -162,103 +176,145 @@ public function index(Request $request)
         return view('funeral.items.edit', compact('item', 'categories'));
     }
 
-    public function update(Request $request, InventoryItem $item)
-    {
-        if ($item->funeral_home_id !== auth()->id()) {
-            abort(403);
-        }
-
-        $category = InventoryCategory::where('id', $request->inventory_category_id)
-            ->where('funeral_home_id', auth()->id())
-            ->firstOrFail();
-
-        // Validation rules
-        $rules = [
-            'inventory_category_id' => [
-                'required',
-                function ($attribute, $value, $fail) {
-                    if (!InventoryCategory::where('id', $value)->where('funeral_home_id', auth()->id())->exists()) {
-                        $fail('Invalid category selection.');
-                    }
-                },
-            ],
-            'name'          => 'required|string|max:100',
-            'brand'         => 'nullable|string|max:100',
-            'status'        => 'required|in:available,in_use,maintenance',
-            'price'         => 'nullable|numeric|min:0',
-            'selling_price' => 'nullable|numeric|min:0',
-            'image'         => 'nullable|image|max:20480', // <--- ADD THIS
-        ];
-
-        if ($category->is_asset) {
-            // Bookable asset: ignore quantity, low stock, expiry, sharing
-        } else {
-            $rules['quantity'] = 'required|integer|min:0';
-            $rules['low_stock_threshold'] = 'required|integer|min:1';
-            $rules['expiry_date'] = 'nullable|date|after_or_equal:today';
-            $rules['shareable'] = 'boolean';
-            $rules['shareable_quantity'] = 'nullable|integer|min:1';
-        }
-
-        $validated = $request->validate($rules);
-
-        // Always assign base fields
-        $item->fill($validated);
-
-        if ($category->is_asset) {
-            $item->quantity = 1;
-            $item->low_stock_threshold = null;
-            $item->expiry_date = null;
-            // Allow assets to be shareable (resource shared) if checkbox is set
-            $item->shareable = $request->has('shareable') ? 1 : 0;
-            $item->shareable_quantity = null; // Usually not used for assets, keep as null
-        } else {
-            $item->shareable = $request->has('shareable') ? 1 : 0;
-            if (!$item->shareable) {
-                $item->shareable_quantity = null;
-            }
-        }
-
-        // IMAGE UPLOAD HANDLING (add, replace, or remove)
-        if ($request->input('remove_image') == "1" && $item->image) {
-            \Storage::disk('public')->delete($item->image);
-            $item->image = null;
-        }
-
-        if ($request->hasFile('image')) {
-            if ($item->image) {
-                \Storage::disk('public')->delete($item->image);
-            }
-            $item->image = $request->file('image')->store('inventory_items', 'public');
-        }
-
-        $item->save();
-
-        // Low stock alert for consumables
-        if (!$category->is_asset && $item->quantity <= $item->low_stock_threshold) {
-            User::where('role', 'funeral')->where('id', auth()->id())->each(function ($user) use ($item) {
-                $user->notify(new LowStockAlert($item));
-            });
-        }
-
-        // Update affected packages (if needed in your system)
-        \App\Http\Controllers\PackageController::updatePackagesWithItem($item->id);
-
-        return redirect()->route('funeral.items.index')->with('success', 'Item updated.');
+public function update(Request $request, InventoryItem $item)
+{
+    if ($item->funeral_home_id !== auth()->id()) {
+        abort(403);
     }
 
-    public function destroy(InventoryItem $item)
-    {
-        if ($item->funeral_home_id !== auth()->id()) {
-            abort(403);
-        }
-        // Remove image file if exists
+    $category = InventoryCategory::where('id', $request->inventory_category_id)
+        ->where('funeral_home_id', auth()->id())
+        ->firstOrFail();
+
+    // Force shareable_quantity to null if shareable is NOT checked (no matter what was posted)
+    if (!$request->has('shareable') || !$request->input('shareable')) {
+        $request->merge(['shareable_quantity' => null]);
+    }
+
+    $rules = [
+        'inventory_category_id' => [
+            'required',
+            function ($attribute, $value, $fail) {
+                if (!InventoryCategory::where('id', $value)->where('funeral_home_id', auth()->id())->exists()) {
+                    $fail('Invalid category selection.');
+                }
+            },
+        ],
+        'name'          => 'required|string|max:100',
+        'brand'         => 'nullable|string|max:100',
+        'status'        => 'required|in:available,in_use,maintenance,reserved',
+        'price'         => 'nullable|numeric|min:0',
+        'selling_price' => 'nullable|numeric|min:0',
+        'image'         => 'nullable|image|max:20480',
+    ];
+
+    if ($category->is_asset) {
+        // Asset logic handled below
+    } else {
+        $rules['quantity'] = 'required|integer|min:0';
+        $rules['low_stock_threshold'] = 'required|integer|min:1';
+        $rules['expiry_date'] = 'nullable|date|after_or_equal:today';
+        $rules['shareable'] = 'nullable|boolean';
+        // Only require shareable_quantity if shareable is checked!
+        $rules['shareable_quantity'] = [
+            'nullable',
+            'integer',
+            function ($attribute, $value, $fail) use ($request) {
+                if ($request->has('shareable') && $request->input('shareable')) {
+                    if (is_null($value) || $value < 1) {
+                        $fail('Shareable quantity must be at least 1 when sharing is enabled.');
+                    }
+                }
+            }
+        ];
+    }
+
+    $validated = $request->validate($rules);
+
+    $item->fill($validated);
+
+    if ($category->is_asset) {
+        $item->quantity = 1;
+        $item->low_stock_threshold = null;
+        $item->expiry_date = null;
+        $item->shareable = $request->has('shareable') ? 1 : 0;
+        $item->shareable_quantity = null;
+    } else {
+        $item->shareable = $request->has('shareable') ? 1 : 0;
+        $item->shareable_quantity = $item->shareable ? (int) $request->input('shareable_quantity') : null;
+    }
+
+    // Image logic (unchanged)
+    if ($request->input('remove_image') == "1" && $item->image) {
+        \Storage::disk('public')->delete($item->image);
+        $item->image = null;
+    }
+    if ($request->hasFile('image')) {
         if ($item->image) {
             \Storage::disk('public')->delete($item->image);
         }
-        $item->delete();
-        return redirect()->route('funeral.items.index')->with('success', 'Item deleted.');
+        $item->image = $request->file('image')->store('inventory_items', 'public');
     }
+
+    $item->save();
+
+    // Low stock alert for consumables
+    if (!$category->is_asset && $item->quantity <= $item->low_stock_threshold) {
+        User::where('role', 'funeral')->where('id', auth()->id())->each(function ($user) use ($item) {
+            $user->notify(new LowStockAlert($item));
+        });
+    }
+
+    \App\Http\Controllers\PackageController::updatePackagesWithItem($item->id);
+
+    return redirect()->route('funeral.items.index')->with('success', 'Item updated.');
+}
+
+
+
+
+
+public function destroy(InventoryItem $item)
+{
+    try {
+        \Log::debug('[destroy] Called', [
+            'item_id' => $item->id,
+            'funeral_home_id' => $item->funeral_home_id,
+            'auth_id' => auth()->id(),
+            'image' => $item->image,
+        ]);
+        if ($item->funeral_home_id !== auth()->id()) {
+            \Log::warning('[destroy] Unauthorized', [
+                'item_id' => $item->id,
+                'expected' => $item->funeral_home_id,
+                'actual' => auth()->id()
+            ]);
+            abort(403);
+        }
+
+        // Unlink from resource requests if you want to allow deletion
+        \App\Models\ResourceRequest::where('requested_item_id', $item->id)
+            ->update(['requested_item_id' => null]);
+        \App\Models\ResourceRequest::where('provider_item_id', $item->id)
+            ->update(['provider_item_id' => null]);
+
+        if ($item->image) {
+            \Log::debug('[destroy] Deleting image', ['image' => $item->image]);
+            \Storage::disk('public')->delete($item->image);
+        }
+
+        $item->delete();
+        \Log::debug('[destroy] Item deleted', ['item_id' => $item->id]);
+        return redirect()->route('funeral.items.index')->with('success', 'Item deleted.');
+    } catch (\Exception $e) {
+        \Log::error('[destroy] Exception', [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return back()->withErrors(['error' => 'Failed to delete item: ' . $e->getMessage()]);
+    }
+}
+
 
     public function adjustStock(Request $request, InventoryItem $item)
     {

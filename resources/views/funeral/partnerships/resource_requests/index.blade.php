@@ -8,7 +8,7 @@
                     <h5 class="mb-4 fw-bold"><i class="bi bi-inbox me-2"></i> Resource Requests</h5>
                     <a href="{{ route('funeral.partnerships.resource_requests.browse') }}"
                         class="btn btn-success w-100 mb-3 fw-semibold rounded-pill shadow">
-                        <i class="bi bi-search me-1"></i> Browse Resources
+                        <i class="bi bi-search me-1"></i> Browse Partners' Shareables
                     </a>
                     <ul class="nav flex-column nav-pills" id="sidebarNav" role="tablist">
                         <li class="nav-item mb-2">
@@ -143,13 +143,15 @@
                                                                 </form>
                                                             @endif
                                                             @if($request->status === 'approved')
-                                                                <button class="btn btn-sm btn-outline-primary px-2"
-                                                                    data-bs-toggle="modal"
-                                                                    data-bs-target="#receiveModal"
-                                                                    data-request-id="{{ $request->id }}"
-                                                                >
-                                                                    <i class="bi bi-box-arrow-in-down"></i>
-                                                                </button>
+<!-- Example usage in your table/list -->
+<button type="button"
+    class="btn btn-success"
+    data-bs-toggle="modal"
+    data-bs-target="#receiveModal"
+    data-request-id="{{ $request->id }}"
+    data-is-asset="{{ $request->providerItem->category->is_asset ?? 0 }}">
+    <i class="bi bi-box-arrow-in-down"></i>
+</button>
                                                             @endif
                                                         </td>
                                                     </tr>
@@ -596,7 +598,6 @@
                         </div>
                     </div>
 
-<!-- Improved Receive Modal with Required Category Selection -->
 <div class="modal fade" id="receiveModal" tabindex="-1" aria-labelledby="receiveModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <form method="POST" id="receiveForm">
@@ -608,20 +609,30 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p>
-                        Please select a category to assign this received item in your inventory:<br>
-                    </p>
-                    <div class="mb-3">
-                        <label for="categorySelect" class="form-label">Item Category <span class="text-danger">*</span></label>
-                        <select name="inventory_category_id" id="categorySelect" class="form-select" required>
-                            <option value="">-- Select Category --</option>
-                            @foreach($myCategories as $cat)
-                                <option value="{{ $cat->id }}">{{ $cat->name }}</option>
-                            @endforeach
-                        </select>
-                        @error('inventory_category_id')
-                            <span class="text-danger small">{{ $message }}</span>
-                        @enderror
+                    <!-- Asset (category needed) -->
+                    <div id="asset-category-section" style="display:none;">
+                        <p>
+                            Please select a category to assign this received item in your inventory:<br>
+                        </p>
+                        <div class="mb-3">
+                            <label for="categorySelect" class="form-label">Item Category <span class="text-danger">*</span></label>
+                            <select name="inventory_category_id" id="categorySelect" class="form-select">
+                                <option value="">-- Select Category --</option>
+                                @foreach($myCategories as $cat)
+                                    <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('inventory_category_id')
+                                <span class="text-danger small">{{ $message }}</span>
+                            @enderror
+                        </div>
+                    </div>
+                    <!-- Consumable (no category) -->
+                    <div id="consumable-section" style="display:none;">
+                        <p>
+                            Confirm receipt of this consumable.<br>
+                            <span class="text-info">No category selection is needed for consumables.</span>
+                        </p>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -632,6 +643,7 @@
         </form>
     </div>
 </div>
+
 
 
     </div>
@@ -662,15 +674,38 @@
 <script>
 
     // Receive modal
-    document.addEventListener('DOMContentLoaded', function () {
-        var receiveModal = document.getElementById('receiveModal');
+document.addEventListener('DOMContentLoaded', function () {
+    var receiveModal = document.getElementById('receiveModal');
+    var receiveForm = document.getElementById('receiveForm');
+    var assetSection = document.getElementById('asset-category-section');
+    var consumableSection = document.getElementById('consumable-section');
+    var categorySelect = document.getElementById('categorySelect');
+
+    if (receiveModal) {
         receiveModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
             var requestId = button.getAttribute('data-request-id');
-            var form = document.getElementById('receiveForm');
-            form.action = '/funeral/resource-requests/' + requestId + '/fulfill';
+            var isAsset = button.getAttribute('data-is-asset') == '1' ? true : false;
+
+            // Update form action
+            if (receiveForm) {
+                receiveForm.action = '/funeral/resource-requests/' + requestId + '/fulfill';
+            }
+
+            // Show asset section if asset, else show consumable section
+            if (isAsset) {
+                assetSection.style.display = '';
+                consumableSection.style.display = 'none';
+                if (categorySelect) categorySelect.setAttribute('required', 'required');
+            } else {
+                assetSection.style.display = 'none';
+                consumableSection.style.display = '';
+                if (categorySelect) categorySelect.removeAttribute('required');
+            }
         });
-    });
+    }
+});
+
     // Approve modal with asset details
     document.addEventListener('DOMContentLoaded', function () {
         const approveModal = document.getElementById('approveModal');

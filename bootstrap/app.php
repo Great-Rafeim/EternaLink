@@ -18,6 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => CheckRole::class,
             '2fa' => \App\Http\Middleware\Ensure2FAIsVerified::class,
         ]);
+        
+        // Bypass CSRF for webhook-receiver route
+        $middleware->validateCsrfTokens(except: [
+            'webhook-receiver'
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

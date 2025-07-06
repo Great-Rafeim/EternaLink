@@ -40,6 +40,11 @@ use App\Http\Controllers\CemeteryReportsController;
 use App\Http\Controllers\CemeteryDocumentsController;
 use App\Http\Controllers\CemeteryNotificationController;
 use App\Http\Controllers\CemeteryProfileController;
+use App\Http\Controllers\PayMongoWebhookController;
+use App\Http\Controllers\AdminProfitController;
+use App\Http\Controllers\FuneralProfitController;
+
+
 
 
 Route::get('/', function () {
@@ -67,6 +72,8 @@ Route::prefix('client')
         // Booking
         Route::get('/parlors/packages/{package}/book', [ClientBookingController::class, 'showBookForm'])->name('parlors.packages.book');
         Route::post('/parlors/packages/{package}/book', [ClientBookingController::class, 'store'])->name('parlors.packages.book.submit');
+        Route::get('/bookings/{booking}/download-certificate', [BookingDetailPreviewController::class, 'downloadCertificate'])->name('bookings.download-certificate');
+
 
         // Booking Phase 2 (Details, Payment, Agent)
         Route::get('/bookings/{booking}/continue', [BookingContinueController::class, 'edit'])->name('bookings.continue.edit');
@@ -89,6 +96,11 @@ Route::prefix('client')
         // Phase 3: Save/Update info-of-the-dead
         Route::post('/bookings/{booking}/info', [BookingContinueController::class, 'saveInfo'])->name('bookings.continue.info.save');
         Route::post('/bookings/continue/{booking}/info', [BookingContinueController::class, 'updateInfo'])->name('bookings.details.update');
+        Route::get('/bookings/continue/{booking}/payment', [BookingContinueController::class, 'showPayment'])->name('bookings.payment');
+      //  Route::post('/bookings/{booking}/paymongo-charge', [BookingContinueController::class, 'payWithPayMongo'])->name('bookings.paymongo.charge');
+        Route::get('bookings/{booking}/paymongo-success', [BookingContinueController::class, 'paymongoSuccess'])->name('bookings.paymongo.success');
+        Route::get('bookings/{booking}/paymongo-failed', [BookingContinueController::class, 'paymongoFailed'])->name('bookings.paymongo.failed');
+        Route::post('/bookings/{booking}/paymongo-charge', [BookingContinueController::class, 'payWithLink'])->name('bookings.pay.link');
 
 
         //
@@ -175,6 +187,8 @@ Route::middleware(['auth', '2fa', 'verified'])->group(function () {
 Route::middleware(['auth', 'verified', '2fa', 'role:admin'])->group(function () {
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
     Route::get('/admin/login-history', [AdminDashboardController::class, 'loginHistory'])->name('admin.login-history');
+    Route::get('/admin/profits', [AdminProfitController::class, 'index'])->name('admin.profits');
+
 
 Route::get('admin/users/{user}', [AdminUserManagementController::class, 'show'])->name('admin.users.show');
 Route::patch('admin/users/{user}/approve', [AdminUserManagementController::class, 'approve'])->name('admin.users.approve');
@@ -227,6 +241,10 @@ Route::prefix('funeral')
 
         Route::resource('schedules', ScheduleController::class);
 
+        Route::get('funeral/profits', [FuneralProfitController::class, 'index'])->name('profits.index');
+
+
+
         //funeral profile
         Route::get('profile/edit', [FuneralParlorController::class, 'editProfile'])->name('profile.edit');
         Route::post('profile/edit', [FuneralParlorController::class, 'updateProfile'])->name('profile.update');
@@ -257,8 +275,13 @@ Route::prefix('funeral')
         // Resource Sharing
         Route::get('/funeral/resource-requests/request/{id}', [ResourceShareController::class, 'showShareableItems'])->name('partnerships.resource_requests.request');
         Route::post('/funeral/resource-requests/send-request/{item}/{shareable}', [ResourceShareController::class, 'sendRequest'])->name('partnerships.resource_requests.sendRequest');
-        Route::get('/funeral/resource-requests/request/{requested}/{provider}', [ResourceShareController::class, 'createRequestForm'])->name('partnerships.resource_requests.createRequestForm');
-        Route::post('/funeral/resource-requests/request', [ResourceShareController::class, 'storeRequest'])->name('partnerships.resource_requests.storeRequest');
+
+        // This goes ABOVE the double-param route
+Route::get('resource-requests/request/{provider}', [ResourceShareController::class, 'createRequestForm'])->name('partnerships.resource_requests.createRequestForm');
+// Existing double-param route (keep it, but put it after)
+Route::get('resource-requests/request/{requested}/{provider}', [ResourceShareController::class, 'createRequestForm']);
+     
+Route::post('resource-requests/request', [ResourceShareController::class, 'storeRequest'])->name('partnerships.resource_requests.storeRequest');
         Route::get('/funeral/partnerships/resource-requests/request', [ResourceShareController::class, 'showAllShareableItems'])->name('partnerships.resource_requests.browse');
 
         Route::get('/funeral/resource-requests', [ResourceRequestController::class, 'index'])->name('partnerships.resource_requests.index');
@@ -274,6 +297,7 @@ Route::prefix('funeral')
         //Bookings
         Route::get('/bookings', [FuneralDashboardController::class, 'bookings'])->name('bookings.index');
         Route::get('/bookings/{booking}/details/pdf', [BookingDetailPreviewController::class, 'exportPdf'])->name('bookings.exportPdf');
+        Route::get('/bookings/{booking}/download-certificate', [BookingDetailPreviewController::class, 'downloadCertificate'])->name('bookings.download-certificate');
 
         Route::get('/bookings/{booking}', [FuneralDashboardController::class, 'show'])->name('bookings.show');
         Route::get('/funeral/bookings/{booking}/show-request', [FuneralDashboardController::class, 'showBooking'])->name('bookings.showBooking');
@@ -289,14 +313,25 @@ Route::prefix('funeral')
         Route::patch('/bookings/{booking}/other-fees', [FuneralDashboardController::class, 'updateOtherFees'])->name('bookings.updateOtherFees');
         Route::patch('/bookings/{booking}/update-payment-remarks', [FuneralDashboardController::class, 'updatePaymentRemarks'])->name('bookings.updatePaymentRemarks');
         Route::patch('/bookings/{booking}/start-service', [FuneralDashboardController::class, 'startService'])->name('bookings.startService');
-        Route::get('/bookings/{booking}/manage-service', [FuneralDashboardController::class, 'manageService'])->name('bookings.manageService');
+        //Route::get('/bookings/{booking}/manage-service', [FuneralDashboardController::class, 'manageService'])->name('bookings.manageService');
+
+        Route::get('/bookings/continue/{booking}/payment', [FuneralDashboardController::class, 'showPayment'])->name('bookings.payment');
+        //Route::post('/bookings/{booking}/paymongo-charge', [FuneralDashboardController::class, 'payWithPayMongo'])->name('bookings.paymongo.charge');
+        Route::get('bookings/{booking}/paymongo-success', [FuneralDashboardController::class, 'paymongoSuccess'])->name('bookings.paymongo.success');
+        Route::get('bookings/{booking}/paymongo-failed', [FuneralDashboardController::class, 'paymongoFailed'])->name('bookings.paymongo.failed');
+        Route::post('/bookings/{booking}/paymongo-charge', [FuneralDashboardController::class, 'payWithLink'])->name('bookings.pay.link');
+
 
         // Manage Service
         Route::get('/bookings/{booking}/manage-service', [ManageServiceController::class, 'index'])->name('bookings.manage-service');
         Route::post('/bookings/{booking}/manage-service/post-update', [ManageServiceController::class, 'postUpdate'])->name('bookings.manage-service.post-update');
         Route::patch('/bookings/{booking}/manage-service/end', [ManageServiceController::class, 'endService'])->name('bookings.manage-service.end');
         Route::post('/bookings/{booking}/assign-assets', [ManageServiceController::class, 'assignAssets'])->name('bookings.assign-assets');
-        
+        Route::post('/bookings/{booking}/release-certificate', [ManageServiceController::class, 'releaseCertificate'])->name('bookings.release-certificate');
+
+
+
+
         Route::get('/', [AssetReservationController::class, 'index'])->name('assets.reservations.index');
         Route::patch('/{reservation}/status', [AssetReservationController::class, 'updateStatus'])->name('assets.reservations.updateStatus');
         Route::patch('/assets/reservations/{reservation}/cancel', [AssetReservationController::class, 'cancel'])->name('assets.reservations.cancel');
@@ -309,7 +344,7 @@ Route::prefix('funeral')
 
         // Update Info-of-the-Dead form (POST/PATCH)
         Route::patch('/bookings/{booking}/update-info', [FuneralDashboardController::class, 'updateInfo'])->name('bookings.updateInfo');
-
+        
 
 
 
@@ -427,6 +462,7 @@ Route::prefix('agent')->name('agent.')->middleware(['auth', 'verified', 'role:ag
     Route::get('/bookings/{booking}', [AgentDashboardController::class, 'show'])->name('bookings.show');
     // Export booking PDF
     Route::get('/bookings/{booking}/details/pdf', [BookingDetailPreviewController::class, 'exportPdf'])->name('bookings.exportPdf');
+    Route::get('/bookings/{booking}/download-certificate', [BookingDetailPreviewController::class, 'downloadCertificate'])->name('bookings.download-certificate');
 
     // --- Edit Booking (main booking form) ---
     Route::get('/bookings/{booking}/edit', [AgentDashboardController::class, 'editBooking'])->name('bookings.editBooking');
@@ -441,7 +477,20 @@ Route::prefix('agent')->name('agent.')->middleware(['auth', 'verified', 'role:ag
     Route::post('/bookings/{booking}/customize/send', [AgentDashboardController::class, 'sendCustomizationRequest'])->name('bookings.customize.send');
 
 
+        Route::get('/bookings/continue/{booking}/payment', [AgentDashboardController::class, 'showPayment'])->name('bookings.payment');
+       // Route::post('/bookings/{booking}/paymongo-charge', [AgentDashboardController::class, 'payWithPayMongo'])->name('bookings.paymongo.charge');
+        Route::get('bookings/{booking}/paymongo-success', [AgentDashboardController::class, 'paymongoSuccess'])->name('bookings.paymongo.success');
+        Route::get('bookings/{booking}/paymongo-failed', [AgentDashboardController::class, 'paymongoFailed'])->name('bookings.paymongo.failed');
+        Route::post('/bookings/{booking}/paymongo-charge', [AgentDashboardController::class, 'payWithLink'])->name('bookings.pay.link');
+
+
+
 });
+
+Route::post('/paymongo/webhook', [PayMongoWebhookController::class, 'handle']);
+Route::post('checkout', [PayMongoWebhookControllerr::class, 'checkout'])->name('checkout');
+Route::post('webhook-receiver', [PayMongoWebhookController::class, 'webhook'])->name('webhook');
+Route::get('notify', [PayMongoWebhookController::class, 'notify'])->name('notify');
 
 
 

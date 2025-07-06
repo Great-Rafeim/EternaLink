@@ -41,7 +41,7 @@
                                         You have no active bookings at the moment.
                                     </p>
                                     <a href="{{ route('client.parlors.index') }}" class="btn btn-lg btn-primary px-5 py-2 rounded-pill shadow-sm">
-                                        <i class="bi bi-search me-2"></i> Find Funeral Parlors
+                                        <i class="bi bi-search me-2"></i> Funeral Service Providers
                                     </a>
                                 </div>
                             </div>
@@ -76,7 +76,10 @@
                                                     'completed'    => ['label' => 'Completed',      'color' => 'dark',     'icon' => 'check-circle'],
                                                     'declined'     => ['label' => 'Declined',       'color' => 'danger',   'icon' => 'x-circle'],
                                                     'cancelled'     => ['label' => 'cancelled',       'color' => 'danger',   'icon' => 'slash-circle'],
-                                                ];
+                                                    'pending_payment'   => ['label' => 'Payment Pending','color' => 'primary',  'icon' => 'credit-card'],
+                                                    'paid'              => ['label' => 'Paid',           'color' => 'success',  'icon' => 'check2-circle'],
+
+                                                    ];
                                                 $status = $statuses[$booking->status] ?? ['label' => ucfirst($booking->status), 'color' => 'secondary', 'icon' => 'question-circle'];
                                                 $assignedAgent = $booking->bookingAgent->agentUser ?? null;
                                             @endphp
@@ -122,11 +125,7 @@
                 <i class="bi bi-pencil-square"></i> Fill
             </a>
         @elseif($booking->status === 'in_progress')
-            <a href="{{ route('client.bookings.continue.edit', $booking->id) }}"
-                class="btn btn-outline-secondary btn-sm rounded-pill"
-                title="Edit your booking details">
-                <i class="bi bi-pencil-square"></i> Edit
-            </a>
+
             <a href="{{ route('client.bookings.continue.info', $booking->id) }}"
                 class="btn btn-warning btn-sm rounded-pill"
                 title="Continue filling personal details">
@@ -144,6 +143,11 @@
                 <i class="bi bi-hourglass-top"></i> Awaiting
             </a>
         @elseif($booking->status === 'for_review')
+        <a href="{{ route('client.bookings.continue.info', $booking->id) }}"
+                class="btn btn-outline-secondary btn-sm rounded-pill"
+                title="Edit booking details">
+                <i class="bi bi-pencil-square"></i> Edit
+            </a>
             <a href="{{ route('client.bookings.show', $booking->id) }}"
                 class="btn btn-info btn-sm rounded-pill"
                 title="Waiting for parlor review">
@@ -154,6 +158,12 @@
                 title="Booking approved">
                 <i class="bi bi-shield-check"></i> Ready
             </span>
+        @elseif($booking->status === 'pending_payment')
+            <a href="{{ route('client.bookings.payment', $booking->id) }}"
+                class="btn btn-warning btn-sm rounded-pill"
+                title="Proceed to payment">
+                <i class="bi bi-cash-coin"></i> Pay Now
+            </a>
         @elseif($booking->status === 'ongoing')
             <a href="{{ route('client.bookings.show', $booking->id) }}"
                 class="btn btn-primary btn-sm rounded-pill"
@@ -203,6 +213,7 @@
         @endif
     </div>
 </td>
+
 
 
 

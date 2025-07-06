@@ -26,6 +26,9 @@ class ResourceRequest extends Model
         'contact_email',
         'location',
         'status',
+                'new_item_name',
+        'new_item_category_id',
+        'new_item_brand',
     ];
 
     // Relationships (recommended)

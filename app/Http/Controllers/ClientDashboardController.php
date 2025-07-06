@@ -36,43 +36,40 @@ class ClientDashboardController extends Controller
 public function show($id)
 {
     $booking = \App\Models\Booking::with([
-            'package.items.category',
-            'funeralHome',
-            'bookingAgent.agentUser',
-            // Eager load cemetery relationships:
-            'cemeteryBooking.cemetery.user',
-            'cemeteryBooking.plot',
-        ])
-        ->where('client_user_id', \Auth::id())
-        ->findOrFail($id);
+        'package.items.category',
+        'funeralHome',
+        'bookingAgent.agentUser',
+        'cemeteryBooking.cemetery.user',
+        'cemeteryBooking.plot',
+        // Eager-load everything you need for both original and customized package flows:
+        'customizedPackage.items.inventoryItem.category',
+        'customizedPackage.items.substituteFor',
+    ])
+    ->where('client_user_id', \Auth::id())
+    ->findOrFail($id);
 
-    // Prepare the package items array
-    $packageItems = $booking->package->items->map(function($item) {
-        return [
-            'item'       => $item->name,
-            'category'   => $item->category->name ?? '-',
-            'brand'      => $item->brand ?? '-',
-            'quantity'   => $item->pivot->quantity ?? 1,
-            'category_id'=> $item->category->id ?? null,
-            'is_asset'   => ($item->category->is_asset ?? false) ? true : false,
-        ];
-    })->toArray();
-
-    // Get all asset categories linked to this package
-    $assetCategories = \DB::table('package_asset_categories')
-        ->join('inventory_categories', 'package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
-        ->where('package_asset_categories.service_package_id', $booking->package->id)
+    // Fetch all asset categories linked to this package, including price
+    $assetCategories = \DB::table('inventory_categories')
+        ->join('package_asset_categories', function ($join) use ($booking) {
+            $join->on('package_asset_categories.inventory_category_id', '=', 'inventory_categories.id')
+                ->where('package_asset_categories.service_package_id', $booking->package->id);
+        })
         ->where('inventory_categories.is_asset', 1)
-        ->select('inventory_categories.id', 'inventory_categories.name')
+        ->select(
+            'inventory_categories.id as id',
+            'inventory_categories.name as name',
+            'inventory_categories.is_asset',
+            'package_asset_categories.price as price'
+        )
         ->get();
 
-    // Load service logs (order by most recent)
+    $assetCategoryPrices = $assetCategories->pluck('price', 'id')->toArray();
+
     $serviceLogs = \App\Models\BookingServiceLog::with('user')
         ->where('booking_id', $booking->id)
         ->orderBy('created_at', 'desc')
         ->get();
 
-    // Find assigned plot via booking_details
     $bookingDetail = \App\Models\BookingDetail::where('booking_id', $booking->id)->first();
     $plot = null;
     $plotCemetery = null;
@@ -81,22 +78,23 @@ public function show($id)
     if ($bookingDetail && $bookingDetail->plot_id) {
         $plot = \App\Models\Plot::with('cemetery.user')->find($bookingDetail->plot_id);
         if ($plot) {
-            $plotCemetery = $plot->cemetery;         // The Cemetery model
-            $cemeteryOwner = $plotCemetery?->user;   // The User model (cemetery owner)
+            $plotCemetery = $plot->cemetery;
+            $cemeteryOwner = $plotCemetery?->user;
         }
     }
 
-    // Now you can use $booking->cemeteryBooking and $plot, $plotCemetery, $cemeteryOwner in your Blade
     return view('client.bookings.show', compact(
         'booking',
-        'packageItems',
         'assetCategories',
+        'assetCategoryPrices',
         'serviceLogs',
         'plot',
         'plotCemetery',
         'cemeteryOwner'
     ));
 }
+
+
 
 
 

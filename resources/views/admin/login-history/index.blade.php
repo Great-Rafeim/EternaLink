@@ -10,29 +10,30 @@
         </div>
 
         <div class="card shadow-sm rounded-4 border-0">
-            <div class="card-header bg-light">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
                 <strong>
                     <i class="bi bi-journal-check me-1"></i> Recent Logins
                 </strong>
+                <input id="login-search" class="form-control form-control-sm w-auto" placeholder="Search..." autocomplete="off" style="max-width:200px;">
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0">
+                    <table class="table table-hover mb-0" id="login-table">
                         <thead class="table-light">
                             <tr>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Role</th>
-                                <th>Login Time</th>
+                                <th class="sort" data-sort="user_name" style="cursor:pointer">Name <i class="bi bi-caret-down-fill small"></i></th>
+                                <th class="sort" data-sort="user_email" style="cursor:pointer">Email <i class="bi bi-caret-down-fill small"></i></th>
+                                <th class="sort" data-sort="user_role" style="cursor:pointer">Role <i class="bi bi-caret-down-fill small"></i></th>
+                                <th class="sort" data-sort="login_time" style="cursor:pointer">Login Time <i class="bi bi-caret-down-fill small"></i></th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody class="list">
                             @forelse($logins as $login)
                                 <tr>
-                                    <td>{{ $login->user->name }}</td>
-                                    <td>{{ $login->user->email }}</td>
-                                    <td class="text-capitalize">{{ $login->user->role }}</td>
-                                    <td>{{ $login->created_at->format('Y-m-d H:i:s') }}</td>
+                                    <td class="user_name">{{ $login->user->name }}</td>
+                                    <td class="user_email">{{ $login->user->email }}</td>
+                                    <td class="user_role text-capitalize">{{ $login->user->role }}</td>
+                                    <td class="login_time">{{ $login->created_at->format('Y-m-d H:i:s') }}</td>
                                 </tr>
                             @empty
                                 <tr>
@@ -49,4 +50,19 @@
             </div>
         </div>
     </div>
+
+    {{-- List.js for client-side search & sorting --}}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/list.js/2.3.1/list.min.js"></script>
+    <script>
+        // Init List.js for this page's table (only on current page)
+        const loginList = new List('login-table', {
+            valueNames: [
+                'user_name', 'user_email', 'user_role', 'login_time'
+            ],
+            listClass: 'list'
+        });
+        document.getElementById('login-search').addEventListener('keyup', function() {
+            loginList.search(this.value);
+        });
+    </script>
 </x-admin-layout>

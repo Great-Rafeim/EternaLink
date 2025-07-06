@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\InventoryItem;
+use App\Models\InventoryCategory;
 use App\Models\Partnership;
 use App\Models\ResourceRequest;
 use Illuminate\Http\Request;
@@ -147,34 +148,149 @@ public function showAllShareableItems(Request $request)
     ]);
 }
 
-    // Show the request form for a selected shareable item
-    public function createRequestForm($requestedId, $providerId)
-    {
-        $requestedItem = InventoryItem::with('funeralUser', 'category')->findOrFail($requestedId);
-        $providerItem = InventoryItem::with('funeralUser', 'category')->findOrFail($providerId);
-        $user = auth()->user();
 
-        return view('funeral.partnerships.resource_requests.request_form', [
-            'requestedItem' => $requestedItem,
-            'providerItem' => $providerItem,
-            'user' => $user,
+public function createRequestForm($arg1 = null, $arg2 = null)
+{
+    $user = auth()->user();
+
+    \Log::debug('[createRequestForm] Called', [
+        'arg1' => $arg1,
+        'arg2' => $arg2,
+        'user_id' => $user ? $user->id : null,
+    ]);
+
+    // Route-agnostic: Figure out which param is which
+    if ($arg2 === null) {
+        // Only provider passed
+        $providerId = $arg1;
+        $requestedId = null;
+        \Log::debug('[createRequestForm] Mode: provider-only', [
+            'providerId' => $providerId,
+        ]);
+    } else {
+        // Both requested and provider passed
+        $requestedId = $arg1;
+        $providerId = $arg2;
+        \Log::debug('[createRequestForm] Mode: requested+provider', [
+            'requestedId' => $requestedId,
+            'providerId' => $providerId,
         ]);
     }
 
+    // Find provider item
+    try {
+        $providerItem = \App\Models\InventoryItem::with('funeralUser', 'category')->findOrFail($providerId);
+        \Log::debug('[createRequestForm] providerItem found', ['providerItem' => $providerItem->toArray()]);
+    } catch (\Exception $e) {
+        \Log::error('[createRequestForm] providerItem NOT found', ['providerId' => $providerId, 'error' => $e->getMessage()]);
+        abort(404, 'Provider item not found.');
+    }
+
+    // Find requested item, if any
+    $requestedItem = null;
+    if ($requestedId) {
+        try {
+            $requestedItem = \App\Models\InventoryItem::with('funeralUser', 'category')->findOrFail($requestedId);
+            \Log::debug('[createRequestForm] requestedItem found', ['requestedItem' => $requestedItem->toArray()]);
+        } catch (\Exception $e) {
+            \Log::error('[createRequestForm] requestedItem NOT found', ['requestedId' => $requestedId, 'error' => $e->getMessage()]);
+            abort(404, 'Requested item not found.');
+        }
+    }
+
+    // Only load userItems if needed (option B: "add to existing"), i.e. if no requestedItem and consumable
+    $userItems = collect();
+    if (!$requestedItem && $providerItem->category && !$providerItem->category->is_asset) {
+        $userItems = \App\Models\InventoryItem::where('funeral_home_id', $user->id)
+            ->whereHas('category', function ($cat) {
+                $cat->where('is_asset', false);
+            })
+            ->with('category')
+            ->orderBy('name')
+            ->get();
+        \Log::debug('[createRequestForm] userItems loaded', ['count' => $userItems->count()]);
+    } else {
+        \Log::debug('[createRequestForm] userItems not needed');
+    }
+
+    // Categories for new consumable creation (option A)
+    $categories = \App\Models\InventoryCategory::where('funeral_home_id', $user->id)
+        ->where('is_asset', false)
+        ->orderBy('name')
+        ->get();
+    \Log::debug('[createRequestForm] categories loaded', ['count' => $categories->count()]);
+
+    // Final log before returning the view
+    \Log::debug('[createRequestForm] Returning view', [
+        'providerItem_id' => $providerItem->id,
+        'requestedItem_id' => $requestedItem ? $requestedItem->id : null,
+        'userItems_count' => $userItems->count(),
+        'categories_count' => $categories->count(),
+    ]);
+
+    return view('funeral.partnerships.resource_requests.request_form', [
+        'providerItem'  => $providerItem,
+        'requestedItem' => $requestedItem,
+        'userItems'     => $userItems,
+        'categories'    => $categories,
+        'user'          => $user,
+    ]);
+}
+
+
+
 public function storeRequest(Request $request)
 {
-    Log::info('storeRequest started', ['request' => $request->all()]);
-
+    \Log::debug('[storeRequest] Started', ['input' => $request->all()]);
     try {
-        $providerItem = \App\Models\InventoryItem::with('category')->findOrFail($request->input('provider_item_id'));
-        Log::debug('Provider Item loaded', ['providerItem' => $providerItem]);
+        $providerItem = InventoryItem::with('category')->findOrFail($request->input('provider_item_id'));
+        \Log::debug('[storeRequest] providerItem loaded', ['provider_item_id' => $providerItem->id]);
 
         $isAsset = $providerItem->category && $providerItem->category->is_asset;
-        Log::debug('Is Asset?', ['isAsset' => $isAsset]);
+        $newItemData = [];
 
-        // Dynamic validation rules
+        // Consumable flow, requested_item_id may or may not be filled
+        if (!$isAsset && !$request->filled('requested_item_id')) {
+            $action = $request->input('consumable_action');
+            \Log::debug('[storeRequest] Consumable action chosen', ['action' => $action]);
+            if ($action === 'new') {
+                $request->validate([
+                    'new_item_name' => 'required|string|max:255',
+                    'new_item_category_id' => 'required|exists:inventory_categories,id',
+                    'new_item_brand' => 'nullable|string|max:255',
+                ]);
+                $newItemData = [
+                    'new_item_name'        => $request->input('new_item_name'),
+                    'new_item_category_id' => $request->input('new_item_category_id'),
+                    'new_item_brand'       => $request->input('new_item_brand') ?? $providerItem->brand,
+                ];
+                \Log::debug('[storeRequest] newItemData built', $newItemData);
+            } elseif ($action === 'existing') {
+                $request->validate([
+                    'existing_item_id' => [
+                        'required',
+                        'exists:inventory_items,id',
+                        function ($attribute, $value, $fail) {
+                            $item = InventoryItem::where('id', $value)
+                                ->where('funeral_home_id', auth()->id())
+                                ->first();
+                            if (!$item || ($item->category && $item->category->is_asset)) {
+                                $fail('Invalid inventory item selected.');
+                            }
+                        }
+                    ]
+                ]);
+                $requestedItem = InventoryItem::findOrFail($request->input('existing_item_id'));
+                $request->merge(['requested_item_id' => $requestedItem->id]);
+                \Log::debug('[storeRequest] Using existing requested_item_id', ['requested_item_id' => $requestedItem->id]);
+            } else {
+                \Log::error('[storeRequest] No consumable_action selected');
+                return back()->withErrors(['error' => 'Please select how you want to receive the item.']);
+            }
+        }
+
+        // Validation rules for the main form
         $rules = [
-            'requested_item_id' => 'required|exists:inventory_items,id',
             'provider_item_id'  => 'required|exists:inventory_items,id',
             'purpose'           => 'required|string',
             'delivery_method'   => 'required|string|max:100',
@@ -185,45 +301,43 @@ public function storeRequest(Request $request)
             'location'          => 'nullable|string|max:255',
         ];
 
-if ($isAsset) {
-    $rules['reserved_start'] = ['required', 'date', 'after_or_equal:today'];
-    $rules['reserved_end']   = [
-        'required',
-        'date',
-        'after:reserved_start',
-        function ($attribute, $value, $fail) use ($providerItem, $request) {
-            $conflict = \App\Models\AssetReservation::where('inventory_item_id', $providerItem->id)
-                ->whereNotIn('status', ['cancelled', 'completed', 'closed'])
-                ->where(function($q) use ($request) {
-                    $start = $request->input('reserved_start');
-                    $end   = $request->input('reserved_end');
-                    $q->whereBetween('reserved_start', [$start, $end])
-                      ->orWhereBetween('reserved_end', [$start, $end])  
-                      ->orWhere(function($sub) use ($start, $end) {
-                          $sub->where('reserved_start', '<=', $start)
-                              ->where('reserved_end', '>=', $end);
-                      });
-                })
-                ->exists();
-            if ($conflict) {
-                Log::warning('Asset conflict detected', [
-                    'providerItemId' => $providerItem->id,
-                    'reserved_start' => $request->input('reserved_start'),
-                    'reserved_end'   => $request->input('reserved_end')
-                ]);
-                $fail('This asset is already reserved during the selected period.');
-            }
+        // For existing consumables only, require requested_item_id
+        if (!$isAsset && $request->input('consumable_action') === 'existing') {
+            $rules['requested_item_id'] = 'required|exists:inventory_items,id';
         }
-    ];
-}
- else {
+        // For assets, DO NOT require requested_item_id
+        if ($isAsset) {
+            $rules['reserved_start'] = ['required', 'date', 'after_or_equal:today'];
+            $rules['reserved_end'] = [
+                'required',
+                'date',
+                'after:reserved_start',
+                function ($attribute, $value, $fail) use ($providerItem, $request) {
+                    $conflict = \App\Models\AssetReservation::where('inventory_item_id', $providerItem->id)
+                        ->whereNotIn('status', ['cancelled', 'completed', 'closed'])
+                        ->where(function($q) use ($request) {
+                            $start = $request->input('reserved_start');
+                            $end   = $request->input('reserved_end');
+                            $q->whereBetween('reserved_start', [$start, $end])
+                              ->orWhereBetween('reserved_end', [$start, $end])
+                              ->orWhere(function($sub) use ($start, $end) {
+                                  $sub->where('reserved_start', '<=', $start)
+                                      ->where('reserved_end', '>=', $end);
+                              });
+                        })
+                        ->exists();
+                    if ($conflict) {
+                        $fail('This asset is already reserved during the selected period.');
+                    }
+                }
+            ];
+        } else {
             $rules['quantity'] = [
                 'required',
                 'integer',
                 'min:1',
                 function ($attribute, $value, $fail) use ($providerItem) {
                     if ($value > $providerItem->shareable_quantity) {
-                        Log::warning('Quantity greater than shareable', ['requested' => $value, 'available' => $providerItem->shareable_quantity]);
                         $fail('The quantity cannot be greater than the provider\'s shareable quantity (' . $providerItem->shareable_quantity . ').');
                     }
                 },
@@ -231,33 +345,46 @@ if ($isAsset) {
             $rules['preferred_date'] = 'required|date|after_or_equal:today';
         }
 
-        Log::debug('Validation rules built', ['rules' => $rules]);
+        \Log::debug('[storeRequest] Validating main form', ['rules' => $rules]);
         $validated = $request->validate($rules);
-        Log::info('Validation passed', ['validated' => $validated]);
+        \Log::debug('[storeRequest] Validation passed', ['validated' => $validated]);
 
-        $requestedItem = \App\Models\InventoryItem::findOrFail($validated['requested_item_id']);
-        Log::debug('Requested Item loaded', ['requestedItem' => $requestedItem]);
+        $requestedItemId = null;
+        if (!$isAsset && $request->input('consumable_action') === 'existing') {
+            $requestedItemId = $validated['requested_item_id'];
+        }
+        // For assets: leave as null
 
-        // Prepare data
         $data = [
-            'requester_id'       => auth()->id(),
-            'provider_id'        => $providerItem->funeral_home_id,
-            'requested_item_id'  => $requestedItem->id,
-            'provider_item_id'   => $providerItem->id,
-            'purpose'            => $validated['purpose'],
-            'delivery_method'    => $validated['delivery_method'],
-            'notes'              => $validated['notes'] ?? null,
-            'contact_name'       => $validated['contact_name'],
-            'contact_mobile'     => $validated['contact_mobile'] ?? null,
-            'contact_email'      => $validated['contact_email'],
-            'location'           => $validated['location'],
-            'status'             => 'pending',
+            'requester_id'         => auth()->id(),
+            'provider_id'          => $providerItem->funeral_home_id,
+            'provider_item_id'     => $providerItem->id,
+            'requested_item_id'    => $requestedItemId,
+            'purpose'              => $validated['purpose'],
+            'delivery_method'      => $validated['delivery_method'],
+            'notes'                => $validated['notes'] ?? null,
+            'contact_name'         => $validated['contact_name'],
+            'contact_mobile'       => $validated['contact_mobile'] ?? null,
+            'contact_email'        => $validated['contact_email'],
+            'location'             => $validated['location'],
+            'status'               => 'pending',
+            // Default new item fields to null, will overwrite below if present
+            'new_item_name'        => null,
+            'new_item_category_id' => null,
+            'new_item_brand'       => null,
         ];
+
+        if (!empty($newItemData)) {
+            $data['new_item_name']        = $newItemData['new_item_name'];
+            $data['new_item_category_id'] = $newItemData['new_item_category_id'];
+            $data['new_item_brand']       = $newItemData['new_item_brand'];
+            \Log::debug('[storeRequest] Merged new item fields into data', $newItemData);
+        }
 
         if ($isAsset) {
             $data['reserved_start'] = $validated['reserved_start'];
             $data['reserved_end']   = $validated['reserved_end'];
-            $data['quantity']       = 1; // always 1 for asset
+            $data['quantity']       = 1;
             $data['preferred_date'] = null;
         } else {
             $data['quantity']       = $validated['quantity'];
@@ -266,34 +393,35 @@ if ($isAsset) {
             $data['reserved_end']   = null;
         }
 
-        Log::debug('Prepared request data', ['data' => $data]);
+        \Log::debug('[storeRequest] Final resource request data', $data);
 
-        // Create the resource request
-        $resourceRequest = \App\Models\ResourceRequest::create($data);
-        Log::info('ResourceRequest created', ['resourceRequestId' => $resourceRequest->id]);
+        $resourceRequest = ResourceRequest::create($data);
+        \Log::debug('[storeRequest] ResourceRequest created', ['resource_request_id' => $resourceRequest->id]);
 
-        // Send notifications to provider and requester
+        // Notifications
         $providerUser = \App\Models\User::find($resourceRequest->provider_id);
         $requesterUser = \App\Models\User::find($resourceRequest->requester_id);
 
         if ($providerUser && $providerUser->id != $requesterUser->id) {
             $providerUser->notify(new \App\Notifications\ResourceRequestNotification($resourceRequest->id, true, 'submitted'));
-            Log::info('Provider notified', ['providerUserId' => $providerUser->id]);
+            \Log::info('[storeRequest] Provider notified', ['providerUserId' => $providerUser->id]);
         }
         if ($requesterUser) {
             $requesterUser->notify(new \App\Notifications\ResourceRequestNotification($resourceRequest->id, false, 'submitted'));
-            Log::info('Requester notified', ['requesterUserId' => $requesterUser->id]);
+            \Log::info('[storeRequest] Requester notified', ['requesterUserId' => $requesterUser->id]);
         }
-
-        Log::info('storeRequest completed successfully', ['resourceRequestId' => $resourceRequest->id]);
 
         return redirect()->route('funeral.partnerships.resource_requests.index')
             ->with('success', 'Resource request sent successfully!');
-    } catch (\Exception $e) {
-        Log::error('storeRequest error', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-        return redirect()->back()->withInput()->withErrors(['error' => 'An unexpected error occurred: ' . $e->getMessage()]);
+    } catch (\Throwable $e) {
+        \Log::error('[storeRequest] ERROR', ['msg' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+        return back()->withInput()->withErrors(['error' => $e->getMessage()]);
     }
 }
+
+
+
+
 
 
 }

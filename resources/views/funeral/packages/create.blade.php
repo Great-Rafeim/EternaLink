@@ -20,7 +20,15 @@
                 <label class="form-label text-white">Package Name</label>
                 <input type="text" name="name" class="form-control" required value="{{ old('name') }}">
             </div>
-
+<div class="mb-3">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_cremation" id="is-cremation-checkbox" value="1"
+            {{ old('is_cremation') ? 'checked' : '' }}>
+        <label class="form-check-label text-white" for="is-cremation-checkbox">
+            Cremation Package
+        </label>
+    </div>
+</div>
             <div class="mb-3">
                 <label class="form-label text-white">Package Image</label>
                 <input type="file" name="image" class="form-control" accept="image/*" onchange="previewImage(event)">
@@ -35,39 +43,48 @@
                 <textarea name="description" class="form-control">{{ old('description') }}</textarea>
             </div>
             <div class="mb-3">
-                <label class="form-label text-white">Total Price</label>
+                <label class="form-label text-white">Total Price <span class="text-warning">(VAT included)</span></label>
                 <input type="number" name="total_price" class="form-control bg-secondary text-white" readonly id="total-price" value="0.00">
+                <div class="mt-2" id="vat-breakdown" style="font-size: 0.97em; color: #eee;">
+                    {{-- JS will fill this --}}
+                </div>
             </div>
 
-            {{-- Asset Categories --}}
-            <div class="mb-3">
-                <label class="form-label text-white">Bookable Asset Categories</label>
-                <div id="asset-category-list">
-                    @foreach($categories as $category)
-                        @if($category->is_asset)
-                            <div class="form-check mb-2 d-flex align-items-center gap-3">
-                                <input class="form-check-input asset-category-checkbox" type="checkbox" 
-                                    value="{{ $category->id }}" id="asset-category-{{ $category->id }}">
-                                <label class="form-check-label text-white flex-grow-1" for="asset-category-{{ $category->id }}">
-                                    {{ $category->name }} <span class="badge bg-info">Asset</span>
-                                </label>
-                                <input type="number" min="0" step="0.01"
-                                    class="form-control form-control-sm asset-category-price-input"
-                                    data-category-id="{{ $category->id }}"
-                                    style="width:120px;display:none"
-                                    placeholder="Asset Price">
-                            </div>
-                        @endif
-                    @endforeach
+{{-- Asset Categories --}}
+<div class="mb-3">
+    <label class="form-label text-white">Bookable Asset Categories</label>
+    <div class="mb-2 text-warning" style="font-size:0.98em;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        Please carefully select only the asset categories that are relevant to this service package.
+        Not all options below need to be included—choose only what applies for this particular package.
+    </div>
+    <div id="asset-category-list">
+        @foreach($categories as $category)
+            @if($category->is_asset)
+                <div class="form-check mb-2 d-flex align-items-center gap-3">
+                    <input class="form-check-input asset-category-checkbox" type="checkbox" 
+                        value="{{ $category->id }}" id="asset-category-{{ $category->id }}">
+                    <label class="form-check-label text-white flex-grow-1" for="asset-category-{{ $category->id }}">
+                        {{ $category->name }}
+                    </label>
+                    <input type="number" min="0" step="0.01"
+                        class="form-control form-control-sm asset-category-price-input"
+                        data-category-id="{{ $category->id }}"
+                        style="width:120px;display:none"
+                        placeholder="Asset Price">
                 </div>
-                {{-- Dynamic hidden inputs for submission --}}
-                <div id="asset-hidden-fields"></div>
-            </div>
+            @endif
+        @endforeach
+    </div>
+    {{-- Dynamic hidden inputs for submission --}}
+    <div id="asset-hidden-fields"></div>
+</div>
+
 
             {{-- Consumable Categories --}}
             <div class="mb-3">
                 <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#categoryModal">
-                    Add Category and Items
+                    Add Items
                 </button>
             </div>
             <div id="selected-categories"></div>
@@ -129,21 +146,40 @@
         let selectedCategories = [];
         let selectedItems = {}; // { category_id: [{id, name, price, quantity}] }
         let selectedAssets = []; // [{category_id, price}]
+        const VAT_RATE = 0.12; // 12% VAT
 
         function recalculateTotal() {
-            let total = 0;
+            let subtotal = 0;
             // Consumable item prices
             for (const catId in selectedItems) {
                 selectedItems[catId].forEach(item => {
-                    total += (item.price * item.quantity);
+                    subtotal += (item.price * item.quantity);
                 });
             }
             // Asset category prices
             selectedAssets.forEach(asset => {
                 let price = parseFloat(asset.price) || 0;
-                total += price;
+                subtotal += price;
             });
-            document.getElementById('total-price').value = total.toFixed(2);
+
+            // Calculate VAT
+            let vat = subtotal * VAT_RATE;
+            let totalWithVat = subtotal + vat;
+
+            document.getElementById('total-price').value = totalWithVat.toFixed(2);
+
+            // VAT breakdown UI
+            let breakdown = `
+                <div>
+                    <span>Subtotal: <strong>₱${subtotal.toFixed(2)}</strong></span><br>
+                    <span>VAT (12%): <strong class="text-warning">₱${vat.toFixed(2)}</strong></span><br>
+                    <span class="fw-bold">Total (including VAT): <strong class="text-success">₱${totalWithVat.toFixed(2)}</strong></span>
+                </div>
+                <div class="mt-1 text-info small">
+                    <i class="bi bi-info-circle"></i> The Value Added Tax (VAT) of 12% is automatically included in your package total.
+                </div>
+            `;
+            document.getElementById('vat-breakdown').innerHTML = breakdown;
         }
 
         // Asset Categories (dynamic add/remove/price fields)

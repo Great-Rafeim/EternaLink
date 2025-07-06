@@ -33,11 +33,16 @@ public function index($bookingId)
     $packageAssetCategoryIds = \App\Models\PackageAssetCategory::where('service_package_id', $booking->package_id)
         ->pluck('inventory_category_id');
 
-    $assetCategories = InventoryCategory::whereIn('id', $packageAssetCategoryIds)
-        ->where('is_asset', 1)
-        ->get();
+    // Prevent invalid whereIn if no categories
+    if ($packageAssetCategoryIds->isEmpty()) {
+        $assetCategories = collect();
+    } else {
+        $assetCategories = InventoryCategory::whereIn('id', $packageAssetCategoryIds)
+            ->where('is_asset', 1)
+            ->get();
+    }
 
-    // Assigned assets: get currently assigned inventory items for this booking/category
+    // Assigned assets
     $assignedAssets = [];
     foreach ($assetCategories as $cat) {
         $reservation = AssetReservation::where('booking_id', $booking->id)
@@ -49,25 +54,30 @@ public function index($bookingId)
         $assignedAssets[$cat->id] = $reservation ? $reservation->inventoryItem : null;
     }
 
-    // Service window for asset reservation
+    // Service window
     $details = $booking->detail;
     $start = $details?->wake_start_date ?? $details?->interment_cremation_date;
     $end   = $details?->interment_cremation_date ?? $details?->wake_end_date ?? $start;
 
-    // Build available assets (status 'available' or 'borrowed_from_partner', not overlapping with another booking)
+    // If start or end is missing, use today as fallback to avoid query error
+    if (!$start) $start = now();
+    if (!$end) $end = $start;
+
     $availableAssets = [];
     foreach ($assetCategories as $cat) {
         $assets = InventoryItem::where('inventory_category_id', $cat->id)
             ->where('funeral_home_id', $booking->funeral_home_id)
             ->whereIn('status', ['available', 'borrowed_from_partner'])
-            ->whereNotIn('id', function ($query) use ($start, $end) {
-                $query->select('inventory_item_id')
-                    ->from('asset_reservations')
-                    ->where(function ($q) use ($start, $end) {
-                        $q->where('reserved_start', '<', $end)
-                          ->where('reserved_end', '>', $start);
-                    })
-                    ->whereIn('status', ['reserved', 'in_use']);
+            ->when($start && $end, function($q) use ($start, $end) {
+                $q->whereNotIn('id', function ($query) use ($start, $end) {
+                    $query->select('inventory_item_id')
+                        ->from('asset_reservations')
+                        ->where(function ($q) use ($start, $end) {
+                            $q->where('reserved_start', '<', $end)
+                              ->where('reserved_end', '>', $start);
+                        })
+                        ->whereIn('status', ['reserved', 'in_use']);
+                });
             })
             ->get();
         $availableAssets[$cat->id] = $assets;
@@ -88,6 +98,67 @@ public function index($bookingId)
         'serviceEnd'      => $end,
     ]);
 }
+
+public function releaseCertificate(Request $request, Booking $booking)
+{
+    $request->validate([
+        'signature' => 'required|string', // base64 string
+    ]);
+
+    // Store signature (can be saved as file or just as base64)
+    $signature = $request->input('signature');
+    $filePath = null;
+    if (str_starts_with($signature, 'data:image')) {
+        $image = explode(',', $signature)[1];
+        $image = base64_decode($image);
+        $fileName = 'cert_signatures/' . uniqid('sig_') . '.png';
+        \Storage::disk('public')->put($fileName, $image);
+        $filePath = $fileName;
+    }
+
+    $booking->certificate_released_at = now();
+    $booking->certificate_signature = $filePath ?? $signature;
+    $booking->save();
+
+    // Package name (optional chaining for safety)
+    $packageName = $booking->package->name ?? 'No Package';
+    $bookingId = $booking->id;
+
+    // Add a service log (now with package name and booking id)
+    \App\Models\BookingServiceLog::create([
+        'booking_id' => $bookingId,
+        'user_id' => auth()->id(),
+        'message' => "Cremation certificate for booking #$bookingId ({$packageName}) is now ready to be downloaded by the client.",
+    ]);
+
+    // Notify client (more detailed log)
+    if ($booking->client) {
+        \Log::info('[NOTIFY] Cremation certificate ready: Notifying client', [
+            'booking_id'   => $bookingId,
+            'package_name' => $packageName,
+            'client_id'    => $booking->client->id,
+        ]);
+        $booking->client->notify(new \App\Notifications\CremationCertificateReady($booking, $packageName));
+    }
+
+    // Notify agent via bookingAgent
+    if ($booking->bookingAgent && $booking->bookingAgent->agent_user_id) {
+        $agentUser = \App\Models\User::find($booking->bookingAgent->agent_user_id);
+        $clientName = $booking->client->name ?? 'the client';
+        $parlorName = $booking->funeralHome->name ?? 'Funeral Parlor';
+        if ($agentUser) {
+            \Log::info('[NOTIFY] Cremation certificate ready: Notifying agent', [
+                'booking_id'   => $bookingId,
+                'package_name' => $packageName,
+                'agent_id'     => $agentUser->id,
+            ]);
+            $agentUser->notify(new \App\Notifications\CremationCertificateReady($booking, $packageName));
+        }
+    }
+
+    return back()->with('success', 'Certificate released and all relevant parties notified (Booking #'.$bookingId.', '.$packageName.').');
+}
+
 
     /**
      * Handle asset assignments for this booking.

@@ -21,22 +21,37 @@
                     <input type="hidden" name="remove_image" id="remove-image-input" value="0">
                 </div>
             </div>
-
+<div class="mb-3">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_cremation" id="is-cremation-checkbox" value="1"
+            {{ old('is_cremation', $package->is_cremation) ? 'checked' : '' }}>
+        <label class="form-check-label text-white" for="is-cremation-checkbox">
+            Cremation Package
+        </label>
+    </div>
+</div>
             <div class="mb-3">
                 <label class="form-label text-white">Description</label>
                 <textarea name="description" class="form-control">{{ old('description', $package->description) }}</textarea>
             </div>
             <div class="mb-3">
-                <label class="form-label text-white">Total Price</label>
+                <label class="form-label text-white">Total Price <span class="text-warning">(VAT included)</span></label>
                 <input type="number" name="total_price" class="form-control bg-secondary text-white" readonly id="total-price" value="0.00">
+                <div class="mt-2" id="vat-breakdown" style="font-size: 0.97em; color: #eee;">
+                    {{-- JS will fill this --}}
+                </div>
             </div>
 
 {{-- Bookable Asset Categories --}}
 <div class="mb-3">
     <label class="form-label text-white">Bookable Asset Categories</label>
+    <div class="mb-2 text-warning" style="font-size:0.98em;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        Please carefully select only the asset categories that are relevant to this service package.
+        Not all options below need to be included—choose only what applies for this particular package.
+    </div>
     <div id="asset-category-list">
         @php
-            // Build asset price lookup and selection
             $oldAssets = old('assets') ?? null;
             $initialAssets = [];
             if ($oldAssets) {
@@ -58,7 +73,7 @@
                         id="asset-category-{{ $category->id }}"
                         {{ array_key_exists($category->id, $initialAssets) ? 'checked' : '' }}>
                     <label class="form-check-label text-white flex-grow-1" for="asset-category-{{ $category->id }}">
-                        {{ $category->name }} <span class="badge bg-info">Asset</span>
+                        {{ $category->name }}
                     </label>
                     <input type="number" min="0" step="0.01"
                         class="form-control form-control-sm asset-category-price-input"
@@ -77,7 +92,7 @@
             {{-- Consumable Categories --}}
             <div class="mb-3">
                 <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#categoryModal">
-                    Add Category and Items
+                    Add Items
                 </button>
             </div>
             <div id="selected-categories"></div>
@@ -128,228 +143,273 @@
         </div>
     </div>
 
-    {{-- JavaScript --}}
-    <script>
-        const itemsByCategory = @json($itemsByCategory);
-        const categoriesList = @json($categories);
+{{-- JavaScript --}}
+<script>
+    const itemsByCategory = @json($itemsByCategory);
+    const categoriesList = @json($categories);
+    const VAT_RATE = 0.12; // 12% VAT
 
-        // Initial data for asset categories
-        let selectedAssets = [];
-        @foreach($categories as $category)
-            @if($category->is_asset && array_key_exists($category->id, $initialAssets))
-                selectedAssets.push({
-                    category_id: "{{ $category->id }}",
-                    price: "{{ $initialAssets[$category->id] }}"
-                });
-            @endif
-        @endforeach
-
-        let selectedCategories = @json(array_map('strval', array_keys($currentSelection)));
-        let selectedItems = @json($currentSelection);
-
-        function recalculateTotal() {
-            let total = 0;
-            // Consumables
-            for (const catId in selectedItems) {
-                selectedItems[catId].forEach(item => {
-                    total += (item.price * item.quantity);
-                });
-            }
-            // Asset categories
-            selectedAssets.forEach(asset => {
-                let price = parseFloat(asset.price) || 0;
-                total += price;
+    // Initial data for asset categories
+    let selectedAssets = [];
+    @foreach($categories as $category)
+        @if($category->is_asset && array_key_exists($category->id, $initialAssets))
+            selectedAssets.push({
+                category_id: "{{ $category->id }}",
+                price: "{{ $initialAssets[$category->id] }}"
             });
-            document.getElementById('total-price').value = total.toFixed(2);
+        @endif
+    @endforeach
+
+    let selectedCategories = @json(array_map('strval', array_keys($currentSelection)));
+    let selectedItems = @json($currentSelection);
+
+    function recalculateTotal() {
+        let subtotal = 0;
+        // Consumables
+        for (const catId in selectedItems) {
+            selectedItems[catId].forEach(item => {
+                subtotal += (item.price * item.quantity);
+            });
         }
-
-        // Asset Categories logic
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check/uncheck asset category
-            document.querySelectorAll('.asset-category-checkbox').forEach(cb => {
-                cb.addEventListener('change', function() {
-                    const catId = this.value;
-                    const priceInput = document.querySelector('.asset-category-price-input[data-category-id="'+catId+'"]');
-                    if (this.checked) {
-                        priceInput.style.display = "inline-block";
-                        // Add to selectedAssets if not exists
-                        if (!selectedAssets.find(a => a.category_id == catId)) {
-                            selectedAssets.push({category_id: catId, price: priceInput.value || 0});
-                        }
-                    } else {
-                        priceInput.style.display = "none";
-                        priceInput.value = "";
-                        selectedAssets = selectedAssets.filter(a => a.category_id != catId);
-                    }
-                    updateAssetHiddenFields();
-                    recalculateTotal();
-                });
-            });
-            // Price field changes
-            document.querySelectorAll('.asset-category-price-input').forEach(inp => {
-                inp.addEventListener('input', function() {
-                    const catId = this.getAttribute('data-category-id');
-                    let asset = selectedAssets.find(a => a.category_id == catId);
-                    if (asset) {
-                        asset.price = this.value;
-                    }
-                    updateAssetHiddenFields();
-                    recalculateTotal();
-                });
-            });
-            // On load, update hidden fields and recalc total
-            updateAssetHiddenFields();
-            renderCategories();
-            recalculateTotal();
+        // Asset categories
+        selectedAssets.forEach(asset => {
+            let price = parseFloat(asset.price) || 0;
+            subtotal += price;
         });
 
-        // Render hidden fields for submission
-        function updateAssetHiddenFields() {
-            let html = '';
-            selectedAssets.forEach((asset, i) => {
-                html += `<input type="hidden" name="assets[${i}][category_id]" value="${asset.category_id}">`;
-                html += `<input type="hidden" name="assets[${i}][price]" value="${asset.price}">`;
-            });
-            document.getElementById('asset-hidden-fields').innerHTML = html;
-        }
+        // Calculate VAT
+        let vat = subtotal * VAT_RATE;
+        let totalWithVat = subtotal + vat;
 
-        // Consumable categories and items
-        function renderCategories() {
-            let html = '';
-            selectedCategories.forEach(catId => {
-                catId = catId.toString();
-                html += `
-                    <div class="card mb-3" id="category-card-${catId}">
-                        <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
-                            <span>${getCategoryName(catId)}</span>
-                            <div>
-                                <button type="button" class="btn btn-light btn-sm me-2" onclick="showItemsModal('${catId}')">Add item(s)</button>
-                                <button type="button" class="btn btn-danger btn-sm" onclick="removeCategory('${catId}')">Remove Category</button>
-                            </div>
+        document.getElementById('total-price').value = totalWithVat.toFixed(2);
+
+        // VAT breakdown UI
+        let breakdown = `
+            <div>
+                <span>Subtotal: <strong>₱${subtotal.toFixed(2)}</strong></span><br>
+                <span>VAT (12%): <strong class="text-warning">₱${vat.toFixed(2)}</strong></span><br>
+                <span class="fw-bold">Total (including VAT): <strong class="text-success">₱${totalWithVat.toFixed(2)}</strong></span>
+            </div>
+            <div class="mt-1 text-info small">
+                <i class="bi bi-info-circle"></i> The Value Added Tax (VAT) of 12% is automatically included in your package total.
+            </div>
+        `;
+        document.getElementById('vat-breakdown').innerHTML = breakdown;
+    }
+
+    // Asset Categories logic
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check/uncheck asset category
+        document.querySelectorAll('.asset-category-checkbox').forEach(cb => {
+            cb.addEventListener('change', function() {
+                const catId = this.value;
+                const priceInput = document.querySelector('.asset-category-price-input[data-category-id="'+catId+'"]');
+                if (this.checked) {
+                    priceInput.style.display = "inline-block";
+                    // Add to selectedAssets if not exists
+                    if (!selectedAssets.find(a => a.category_id == catId)) {
+                        selectedAssets.push({category_id: catId, price: priceInput.value || 0});
+                    }
+                } else {
+                    priceInput.style.display = "none";
+                    priceInput.value = "";
+                    selectedAssets = selectedAssets.filter(a => a.category_id != catId);
+                }
+                updateAssetHiddenFields();
+                recalculateTotal();
+            });
+        });
+        // Price field changes
+        document.querySelectorAll('.asset-category-price-input').forEach(inp => {
+            inp.addEventListener('input', function() {
+                const catId = this.getAttribute('data-category-id');
+                let asset = selectedAssets.find(a => a.category_id == catId);
+                if (asset) {
+                    asset.price = this.value;
+                }
+                updateAssetHiddenFields();
+                recalculateTotal();
+            });
+        });
+        // Consumable Category Add Handler (fix here)
+        document.querySelectorAll('.select-category').forEach(li => {
+            li.addEventListener('click', function() {
+                const catId = this.getAttribute('data-category-id').toString();
+                // Always add to selectedCategories if not present
+                if (!selectedCategories.includes(catId)) {
+                    selectedCategories.push(catId);
+                }
+                // Always initialize array for selectedItems[catId]
+                if (!Array.isArray(selectedItems[catId])) {
+                    selectedItems[catId] = [];
+                }
+                renderCategories();
+                var categoryModal = bootstrap.Modal.getInstance(document.getElementById('categoryModal'));
+                categoryModal.hide();
+            });
+        });
+        // On load, update hidden fields and recalc total
+        updateAssetHiddenFields();
+        renderCategories();
+        recalculateTotal();
+    });
+
+    // Render hidden fields for submission
+    function updateAssetHiddenFields() {
+        let html = '';
+        selectedAssets.forEach((asset, i) => {
+            html += `<input type="hidden" name="assets[${i}][category_id]" value="${asset.category_id}">`;
+            html += `<input type="hidden" name="assets[${i}][price]" value="${asset.price}">`;
+        });
+        document.getElementById('asset-hidden-fields').innerHTML = html;
+    }
+
+    // Consumable categories and items
+    function renderCategories() {
+        let html = '';
+        selectedCategories.forEach(catId => {
+            catId = catId.toString();
+            html += `
+                <div class="card mb-3" id="category-card-${catId}">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+                        <span>${getCategoryName(catId)}</span>
+                        <div>
+                            <button type="button" class="btn btn-light btn-sm me-2" onclick="showItemsModal('${catId}')">Add item(s)</button>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removeCategory('${catId}')">Remove Category</button>
                         </div>
-                        <div class="card-body" id="category-items-${catId}">
-                            ${renderItems(catId)}
+                    </div>
+                    <div class="card-body" id="category-items-${catId}">
+                        ${renderItems(catId)}
+                    </div>
+                </div>
+            `;
+        });
+        document.getElementById('selected-categories').innerHTML = html;
+        recalculateTotal();
+    }
+
+    function renderItems(catId) {
+        catId = catId.toString();
+        if (!selectedItems[catId] || selectedItems[catId].length === 0) {
+            return `<div class="text-secondary">No items added yet.</div>`;
+        }
+        let html = '<ul class="list-group">';
+        selectedItems[catId].forEach((item, idx) => {
+            html += `
+                <li class="list-group-item d-flex justify-content-between align-items-center bg-dark text-white">
+                    <div>
+                        <input type="hidden" name="items[${catId}][${idx}][id]" value="${item.id}">
+                        ${item.name}
+                        <span class="badge bg-info ms-2">₱${item.price.toFixed(2)}</span>
+                    </div>
+                    <div>
+                        <input type="number" min="1" class="form-control d-inline-block" style="width:80px"
+                            name="items[${catId}][${idx}][quantity]" value="${item.quantity}" 
+                            onchange="updateQuantity('${catId}', ${idx}, this.value)">
+                        <button type="button" class="btn btn-outline-danger btn-sm ms-2" onclick="removeItem('${catId}', ${idx})">Remove</button>
+                    </div>
+                </li>
+            `;
+        });
+        html += '</ul>';
+        return html;
+    }
+
+    function getCategoryName(catId) {
+        let cat = categoriesList.find(c => c.id == catId);
+        return cat ? cat.name : 'Unknown';
+    }
+
+    function removeCategory(catId) {
+        catId = catId.toString();
+        selectedCategories = selectedCategories.filter(id => id !== catId);
+        delete selectedItems[catId];
+        renderCategories();
+    }
+
+    let currentCategory = null;
+    function showItemsModal(catId) {
+        currentCategory = catId.toString();
+        // Always (re)init array if missing
+        if (!Array.isArray(selectedItems[currentCategory])) {
+            selectedItems[currentCategory] = [];
+        }
+        let items = itemsByCategory[currentCategory] || [];
+        let modalBody = '<div class="row">';
+        items.forEach(item => {
+            if (!selectedItems[currentCategory].find(i => i.id == item.id)) {
+                modalBody += `
+                    <div class="col-md-6">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input item-select-checkbox" type="checkbox" 
+                                value="${item.id}" data-item-name="${item.name}" data-item-price="${item.price}" id="item-check-${item.id}">
+                            <label class="form-check-label" for="item-check-${item.id}">${item.name}</label>
                         </div>
                     </div>
                 `;
-            });
-            document.getElementById('selected-categories').innerHTML = html;
-            recalculateTotal();
-        }
-
-        function renderItems(catId) {
-            catId = catId.toString();
-            if (!selectedItems[catId] || selectedItems[catId].length === 0) {
-                return `<div class="text-secondary">No items added yet.</div>`;
             }
-            let html = '<ul class="list-group">';
-            selectedItems[catId].forEach((item, idx) => {
-                html += `
-                    <li class="list-group-item d-flex justify-content-between align-items-center bg-dark text-white">
-                        <div>
-                            <input type="hidden" name="items[${catId}][${idx}][id]" value="${item.id}">
-                            ${item.name}
-                            <span class="badge bg-info ms-2">₱${item.price.toFixed(2)}</span>
-                        </div>
-                        <div>
-                            <input type="number" min="1" class="form-control d-inline-block" style="width:80px"
-                                name="items[${catId}][${idx}][quantity]" value="${item.quantity}" 
-                                onchange="updateQuantity('${catId}', ${idx}, this.value)">
-                            <button type="button" class="btn btn-outline-danger btn-sm ms-2" onclick="removeItem('${catId}', ${idx})">Remove</button>
-                        </div>
-                    </li>
-                `;
-            });
-            html += '</ul>';
-            return html;
-        }
-
-        function getCategoryName(catId) {
-            let cat = categoriesList.find(c => c.id == catId);
-            return cat ? cat.name : 'Unknown';
-        }
-
-        function removeCategory(catId) {
-            catId = catId.toString();
-            selectedCategories = selectedCategories.filter(id => id !== catId);
-            delete selectedItems[catId];
-            renderCategories();
-        }
-
-        let currentCategory = null;
-        function showItemsModal(catId) {
-            currentCategory = catId.toString();
-            let items = itemsByCategory[currentCategory] || [];
-            let modalBody = '<div class="row">';
-            items.forEach(item => {
-                if (!selectedItems[currentCategory].find(i => i.id == item.id)) {
-                    modalBody += `
-                        <div class="col-md-6">
-                            <div class="form-check mb-2">
-                                <input class="form-check-input item-select-checkbox" type="checkbox" 
-                                    value="${item.id}" data-item-name="${item.name}" data-item-price="${item.price}" id="item-check-${item.id}">
-                                <label class="form-check-label" for="item-check-${item.id}">${item.name}</label>
-                            </div>
-                        </div>
-                    `;
-                }
-            });
-            modalBody += '</div>';
-            if (items.length === 0) {
-                modalBody = '<div class="text-secondary">No items available in this category.</div>';
-            }
-            document.getElementById('items-modal-body').innerHTML = modalBody;
-            const itemsModal = new bootstrap.Modal(document.getElementById('itemsModal'));
-            itemsModal.show();
-        }
-
-        document.getElementById('add-selected-items-btn').addEventListener('click', function() {
-            let checkboxes = document.querySelectorAll('.item-select-checkbox:checked');
-            checkboxes.forEach(cb => {
-                let itemId = cb.value;
-                let itemName = cb.getAttribute('data-item-name');
-                let itemPrice = parseFloat(cb.getAttribute('data-item-price'));
-                selectedItems[currentCategory].push({ id: itemId, name: itemName, price: itemPrice, quantity: 1 });
-            });
-            const itemsModal = bootstrap.Modal.getInstance(document.getElementById('itemsModal'));
-            itemsModal.hide();
-            renderCategories();
         });
-
-        function removeItem(catId, idx) {
-            catId = catId.toString();
-            selectedItems[catId].splice(idx, 1);
-            renderCategories();
+        modalBody += '</div>';
+        if (items.length === 0) {
+            modalBody = '<div class="text-secondary">No items available in this category.</div>';
         }
+        document.getElementById('items-modal-body').innerHTML = modalBody;
+        const itemsModal = new bootstrap.Modal(document.getElementById('itemsModal'));
+        itemsModal.show();
+    }
 
-        function updateQuantity(catId, idx, qty) {
-            catId = catId.toString();
-            qty = parseInt(qty) || 1;
-            selectedItems[catId][idx].quantity = qty;
-            recalculateTotal();
+    document.getElementById('add-selected-items-btn').addEventListener('click', function() {
+        let checkboxes = document.querySelectorAll('.item-select-checkbox:checked');
+        // Always (re)init array if missing
+        if (!Array.isArray(selectedItems[currentCategory])) {
+            selectedItems[currentCategory] = [];
         }
+        checkboxes.forEach(cb => {
+            let itemId = cb.value;
+            let itemName = cb.getAttribute('data-item-name');
+            let itemPrice = parseFloat(cb.getAttribute('data-item-price'));
+            selectedItems[currentCategory].push({ id: itemId, name: itemName, price: itemPrice, quantity: 1 });
+        });
+        const itemsModal = bootstrap.Modal.getInstance(document.getElementById('itemsModal'));
+        itemsModal.hide();
+        renderCategories();
+    });
 
-        function previewImage(event) {
-            let preview = document.getElementById('image-preview');
-            preview.innerHTML = "";
-            if (event.target.files && event.target.files[0]) {
-                let reader = new FileReader();
-                reader.onload = function(e) {
-                    let img = document.createElement('img');
-                    img.src = e.target.result;
-                    img.className = "img-thumbnail mb-2";
-                    img.style.maxHeight = "120px";
-                    preview.appendChild(img);
-                }
-                reader.readAsDataURL(event.target.files[0]);
-                document.getElementById('remove-image-input').value = "0";
+    function removeItem(catId, idx) {
+        catId = catId.toString();
+        selectedItems[catId].splice(idx, 1);
+        renderCategories();
+    }
+
+    function updateQuantity(catId, idx, qty) {
+        catId = catId.toString();
+        qty = parseInt(qty) || 1;
+        selectedItems[catId][idx].quantity = qty;
+        recalculateTotal();
+    }
+
+    function previewImage(event) {
+        let preview = document.getElementById('image-preview');
+        preview.innerHTML = "";
+        if (event.target.files && event.target.files[0]) {
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let img = document.createElement('img');
+                img.src = e.target.result;
+                img.className = "img-thumbnail mb-2";
+                img.style.maxHeight = "120px";
+                preview.appendChild(img);
             }
+            reader.readAsDataURL(event.target.files[0]);
+            document.getElementById('remove-image-input').value = "0";
         }
+    }
 
-        function removeCurrentImage() {
-            let preview = document.getElementById('image-preview');
-            preview.innerHTML = '<div class="text-danger mb-2">Image will be removed after update.</div>' +
-                '<input type="hidden" name="remove_image" id="remove-image-input" value="1">';
-        }
-    </script>
+    function removeCurrentImage() {
+        let preview = document.getElementById('image-preview');
+        preview.innerHTML = '<div class="text-danger mb-2">Image will be removed after update.</div>' +
+            '<input type="hidden" name="remove_image" id="remove-image-input" value="1">';
+    }
+</script>
+
 </x-layouts.funeral>

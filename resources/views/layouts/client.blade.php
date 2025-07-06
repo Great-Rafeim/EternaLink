@@ -99,25 +99,25 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {{ request()->routeIs('client.parlors.index') ? 'active' : '' }}" href="{{ route('client.parlors.index') }}">
-                            <i class="bi bi-search me-1"></i> Find Funeral Parlors
+                            <i class="bi bi-search me-1"></i> Find Funeral Homes
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="{{ route('client.cemeteries.index') }}" class="nav-link {{ request()->routeIs('client.parlors.index') ? 'active' : '' }}">
-                            <i class="bi bi-tree me-2"></i>Coordinate with Cemetery
+                            <i class="bi bi-tree me-2"></i>Memorial Facilities
                         </a>
                     </li>
                                             
 
-<li class="nav-item dropdown">
-    <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-        <i class="bi bi-bell"></i>
-        @if(auth()->user()->unreadNotifications->count())
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                {{ auth()->user()->unreadNotifications->count() }}
-            </span>
-        @endif
-    </a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bell"></i>
+                            @if(auth()->user()->unreadNotifications->count())
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                    {{ auth()->user()->unreadNotifications->count() }}
+                                </span>
+                            @endif
+                        </a>
     <ul class="dropdown-menu dropdown-menu-end shadow p-2" style="width: 320px; max-height: 400px; overflow-y: auto;">
         <li class="fw-bold text-secondary px-2 mb-2">Notifications</li>
         @forelse(auth()->user()->unreadNotifications->take(8) as $notification)

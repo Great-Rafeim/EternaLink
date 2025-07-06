@@ -289,22 +289,25 @@ public function storeOccupation(Request $request, Plot $plot)
     }
 
     $validated = $request->validate([
-        'deceased_first_name' => 'required|string|max:255',
-        'deceased_middle_name'=> 'nullable|string|max:255',
-        'deceased_last_name'  => 'required|string|max:255',
-        'deceased_nickname'   => 'nullable|string|max:255',
-        'deceased_sex'        => 'nullable|string|max:10',
-        'deceased_birthday'   => 'nullable|date',
+        'deceased_first_name'  => 'required|string|max:255',
+        'deceased_middle_name' => 'nullable|string|max:255',
+        'deceased_last_name'   => 'required|string|max:255',
+        'deceased_nickname'    => 'nullable|string|max:255',
+        'deceased_sex'         => 'nullable|string|max:10',
+        'deceased_birthday'    => 'nullable|date',
         'deceased_date_of_death' => 'nullable|date',
-        'deceased_age'        => 'nullable|integer',
-        'deceased_civil_status' => 'nullable|string|max:30',
-        'deceased_residence'  => 'nullable|string|max:255',
-        'deceased_citizenship'=> 'nullable|string|max:255',
-        'remarks'             => 'nullable|string',
-        'booking_id'          => 'nullable|exists:cemetery_bookings,id',
+        'deceased_age'         => 'nullable|integer',
+        'deceased_civil_status'=> 'nullable|string|max:30',
+        'deceased_residence'   => 'nullable|string|max:255',
+        'deceased_citizenship' => 'nullable|string|max:255',
+        'remarks'              => 'nullable|string',
+        // 'booking_id'         => REMOVED!
     ]);
 
     $validated['plot_id'] = $plot->id;
+
+    // Make absolutely sure booking_id is NOT present
+    unset($validated['booking_id']);
 
     DB::transaction(function () use ($plot, $validated) {
         // Update plot status
@@ -369,6 +372,16 @@ public function updateOccupation(Request $request, Plot $plot, PlotOccupation $o
     return redirect()->route('cemetery.plots.edit', $plot)
         ->with('success', 'Plot occupation updated successfully.');
 }
+
+
+
+
+
+
+
+
+
+
 
 /**
  * Delete occupation record from plot

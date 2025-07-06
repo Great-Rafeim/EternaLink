@@ -58,9 +58,7 @@
             border-radius: 0.5rem !important;
         }
         /* Match modal dialog width to cards */
-        .modal-dialog {
-            max-width: 900px;
-        }
+
         .btn,
         .form-control,
         .form-select {
@@ -76,20 +74,74 @@
         .alert, .badge {
             border-radius: 0.2rem !important;
         }
+
+.modal-dialog.section-card {
+    max-width: 900px;
+}
+.certificate-modal {
+    max-width: 480px;
+    width: 100%;
+}
+
     </style>
 
     <div class="container py-4">
         <!-- Header -->
-        <div class="d-flex align-items-center mb-4 gap-3" style="max-width: 900px; margin: 0 auto;">
-            <a href="{{ route('funeral.bookings.show', $booking->id) }}" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i>
-                Back to Booking
-            </a>
-            <h2 class="fw-bold mb-0 text-primary d-flex align-items-center gap-2">
-                <i class="bi bi-gear"></i>
-                Manage Service
-            </h2>
+        <!-- Header -->
+        <div class="d-flex align-items-center justify-content-between mb-4 gap-3" style="max-width: 900px; margin: 0 auto;">
+            <div class="d-flex align-items-center gap-3">
+                <a href="{{ route('funeral.bookings.show', $booking->id) }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i>
+                    Back to Booking
+                </a>
+                <h2 class="fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+                    <i class="bi bi-gear"></i>
+                    Manage Service
+                </h2>
+            </div>
+            @if($booking->is_cremation == 1 && !$booking->certificate_released_at)
+                <button type="button" class="btn btn-outline-success shadow" data-bs-toggle="modal" data-bs-target="#releaseCertificateModal">
+                    <i class="bi bi-file-earmark-medical"></i>
+                    Release Cremation Certificate
+                </button>
+            @endif
+            @if($booking->is_cremation == 1 && $booking->certificate_released_at)
+                <a href="{{ route('funeral.bookings.download-certificate', $booking->id) }}" class="btn btn-success shadow" target="_blank">
+                    <i class="bi bi-file-earmark-arrow-down"></i>
+                    Download Certificate
+                </a>
+            @endif
         </div>
+
+<!-- Release Certificate Modal -->
+<div class="modal fade" id="releaseCertificateModal" tabindex="-1" aria-labelledby="releaseCertificateLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <form id="releaseCertificateForm" method="POST" action="{{ route('funeral.bookings.release-certificate', $booking->id) }}">
+            @csrf
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="releaseCertificateLabel">
+                        <i class="bi bi-pen"></i> Funeral Home Signature Required
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Please sign below to confirm release of the cremation certificate.</p>
+                    <canvas id="signature-pad" width="400" height="180" style="border:1px solid #ccc; border-radius:6px;"></canvas>
+                    <input type="hidden" name="signature" id="signatureInput">
+                    <div class="mt-2 d-flex justify-content-between">
+                        <button type="button" class="btn btn-secondary btn-sm" id="clear-signature">Clear</button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-file-earmark-medical"></i> Release Certificate
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
 
         {{-- Alerts --}}
         @if(session('success'))
@@ -172,8 +224,8 @@
         @endif
 
         {{-- End Service Confirmation Modal --}}
-        <div class="modal fade" id="endServiceModal" tabindex="-1" aria-labelledby="endServiceModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
+        <div class="modal fade" id="releaseCertificateModal" tabindex="-1" aria-labelledby="releaseCertificateLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered certificate-modal">
                 <form method="POST" action="{{ route('funeral.bookings.manage-service.end', $booking->id) }}" class="modal-content section-card border-0">
                     @csrf
                     @method('PATCH')
@@ -405,4 +457,45 @@
             </div>
         @endif
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.5/dist/signature_pad.umd.min.js"></script>
+<script>
+    let canvas = document.getElementById('signature-pad');
+    let signaturePad = new SignaturePad(canvas);
+
+    document.getElementById('clear-signature').onclick = function() {
+        signaturePad.clear();
+    };
+
+    document.getElementById('releaseCertificateForm').onsubmit = function(e) {
+        if (signaturePad.isEmpty()) {
+            alert('Please provide a signature.');
+            e.preventDefault();
+            return false;
+        }
+        document.getElementById('signatureInput').value = signaturePad.toDataURL();
+    };
+</script>
+
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.5/dist/signature_pad.umd.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var canvas = document.getElementById('signature-pad');
+            if (canvas) {
+                var signaturePad = new SignaturePad(canvas);
+                document.getElementById('clear-signature').onclick = function() {
+                    signaturePad.clear();
+                };
+                document.getElementById('releaseCertificateForm').onsubmit = function(e) {
+                    if (signaturePad.isEmpty()) {
+                        alert('Please provide a signature.');
+                        e.preventDefault();
+                        return false;
+                    }
+                    document.getElementById('signatureInput').value = signaturePad.toDataURL();
+                };
+            }
+        });
+    </script>
+
 </x-layouts.funeral>

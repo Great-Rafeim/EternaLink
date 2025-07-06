@@ -7,8 +7,9 @@
         {{-- Show alert or disable form fields if not editable --}}
 
 
-         <form action="{{ route('client.bookings.details.updateInfo', $booking->id) }}" method="POST" class="bg-white rounded shadow-sm p-4" enctype="multipart/form-data">
+         <form action="{{ route('agent.bookings.updateInfo', $booking->id) }}" method="POST" class="bg-white rounded shadow-sm p-4" enctype="multipart/form-data">
             @csrf
+            @method('PATCH')
 
 {{-- 1. PERSONAL DETAILS (DECEASED) --}}
 <div class="card mb-4 border-0">
@@ -16,10 +17,21 @@
     <div class="card-body position-relative">
 
 {{-- Image floats right, through-wraps with fields --}}
+@php
+    $imgPath = old('deceased_image') ? asset('storage/' . old('deceased_image')) : ($detail->deceased_image ? asset('storage/' . $detail->deceased_image) : '');
+@endphp
+
 <div style="float: right; width: 120px; margin-left: 20px; margin-bottom: 8px;">
     <label class="form-label text-center w-100">Picture<span class="text-danger"> *</span></label>
     <div id="deceased-image-upload-box" class="mb-2 position-relative" style="width: 120px; height: 120px;">
-        <input type="file" name="deceased_image" id="deceased_image_input" class="d-none" accept="image/*" required>
+        <input 
+            type="file" 
+            name="deceased_image" 
+            id="deceased_image_input" 
+            class="d-none"
+            accept="image/*"
+            @if(empty($imgPath)) required @endif
+        >
         <div id="deceased-image-placeholder"
             class="border border-2 rounded d-flex flex-column justify-content-center align-items-center w-100 h-100 bg-light"
             style="cursor:pointer;">
@@ -27,16 +39,13 @@
             <span class="small text-muted">Insert Image</span>
         </div>
         <img id="deceased-image-preview"
-             src="@php
-                    $imgPath = old('deceased_image') ? asset('storage/' . old('deceased_image')) : ($detail->deceased_image ? asset('storage/' . $detail->deceased_image) : '');
-                    echo $imgPath;
-                  @endphp"
-             class="img-thumbnail {{ ($imgPath ?? '') ? '' : 'd-none' }}"
+             src="{{ $imgPath }}"
+             class="img-thumbnail {{ $imgPath ? '' : 'd-none' }}"
              alt="Deceased Image"
              style="width:120px; height:120px; object-fit:cover; position:absolute; top:0; left:0; z-index:2;">
     </div>
     <button type="button" id="removeDeceasedImage"
-        class="btn btn-sm btn-outline-danger mt-1 w-100 {{ ($imgPath ?? '') ? '' : 'd-none' }}">
+        class="btn btn-sm btn-outline-danger mt-1 w-100 {{ $imgPath ? '' : 'd-none' }}">
         Remove Image
     </button>
     <input type="hidden" name="remove_deceased_image" id="remove_deceased_image" value="0">
@@ -44,6 +53,7 @@
         <div class="text-danger small">{{ $message }}</div>
     @enderror
 </div>
+
 
 
         <div class="row g-3">
@@ -386,16 +396,6 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
 </div>
 
-@php
-    $packageName = $booking->package->name ?? '';
-    $totalAmount = ($booking->customized_package_id && $booking->customizedPackage)
-        ? ($booking->customizedPackage->custom_total_price ?? 0)
-        : ($booking->package->total_price ?? 0);
-
-    $feeAmount = floatval(old('amount', $detail->amount ?? $totalAmount));
-    $otherFee = floatval(old('other_fee', $detail->other_fee ?? 0));
-    $grandTotal = $feeAmount + $otherFee;
-@endphp
 
 {{-- 4. SERVICE, AMOUNT, FEES --}}
 <div class="card mb-4 border-0">
@@ -438,6 +438,16 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
     </div>
 </div>
+@php
+    $packageName = $booking->package->name ?? '';
+    $totalAmount = ($booking->customized_package_id && $booking->customizedPackage)
+        ? ($booking->customizedPackage->custom_total_price ?? 0)
+        : ($booking->package->total_price ?? 0);
+
+    $feeAmount = floatval(old('amount', $detail->amount ?? $totalAmount));
+    $otherFee = floatval(old('other_fee', $detail->other_fee ?? 0));
+    $grandTotal = $feeAmount + $otherFee;
+@endphp
 
 {{-- 5. CERTIFICATION (Paragraph style) --}}
 <div class="card mb-4 border-0">
